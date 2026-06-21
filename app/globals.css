@@ -73,11 +73,11 @@ h2 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 24px; margin-b
 .psum { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48%; }
 .pbody { padding: 2px 18px 20px; }
 
-.cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.cards.cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .cards.cards-grid .tcard { width: auto; }
 .tcard-grp { display: block; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); font-weight: 600; margin-bottom: 1px; }
-@media (max-width: 760px) { .cards-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 480px) { .cards-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .cards.cards-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .cards.cards-grid { grid-template-columns: 1fr; } }
 
 .cards { display: flex; flex-wrap: wrap; gap: 12px; }
 .tcard {
