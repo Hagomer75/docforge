@@ -94,7 +94,7 @@ export default function Landing() {
       {/* hero */}
       <section className={s.wrap}>
         <div className={s.hero}>
-          <div>
+          <div className={s.heroText}>
             <span className={s.eyebrow}>For schools <span className={s.ar}>· يعمل بالعربية</span></span>
             <h1 className={s.h1}>Turn a class list into a stack of <em>finished PDFs</em>.</h1>
             <p className={s.sub}>
@@ -141,10 +141,10 @@ export default function Landing() {
       <section className={s.sectionAlt}>
         <div className={s.wrap}>
           <div className={s.stats}>
-            <div className={s.stat}><span className={s.statNum}>10</span><span className={s.statLbl}>document templates</span></div>
-            <div className={s.stat}><span className={s.statNum}>2</span><span className={s.statLbl}>languages · EN + AR</span></div>
-            <div className={s.stat}><span className={s.statNum}>100s</span><span className={s.statLbl}>students per run</span></div>
-            <div className={s.stat}><span className={s.statNum}>0</span><span className={s.statLbl}>logins or installs</span></div>
+            <div className={`${s.stat} ${s.reveal}`}><span className={s.statNum}>10</span><span className={s.statLbl}>document templates</span></div>
+            <div className={`${s.stat} ${s.reveal}`}><span className={s.statNum}>2</span><span className={s.statLbl}>languages · EN + AR</span></div>
+            <div className={`${s.stat} ${s.reveal}`}><span className={s.statNum}>100s</span><span className={s.statLbl}>students per run</span></div>
+            <div className={`${s.stat} ${s.reveal}`}><span className={s.statNum}>0</span><span className={s.statLbl}>logins or installs</span></div>
           </div>
         </div>
       </section>
@@ -152,14 +152,14 @@ export default function Landing() {
       {/* how it works */}
       <section id="how" className={s.section}>
         <div className={s.wrap}>
-          <div className={s.center}>
+          <div className={`${s.center} ${s.reveal}`}>
             <span className={s.kicker}>How it works</span>
             <h2 className={s.h2}>Three steps, start to finish</h2>
             <p className={s.lead}>No templates to design, no mail-merge gymnastics. Just your list and a few clicks.</p>
           </div>
           <div className={s.steps}>
             {STEPS.map((st, i) => (
-              <div className={s.step} key={i}>
+              <div className={`${s.step} ${s.reveal}`} key={i}>
                 <div className={s.stepN}>{i + 1}</div>
                 <div className={s.stepIc}>{st.ic}</div>
                 <h3>{st.t}</h3>
@@ -173,14 +173,14 @@ export default function Landing() {
       {/* templates */}
       <section id="templates" className={`${s.section} ${s.sectionAlt}`}>
         <div className={s.wrap}>
-          <div className={s.center}>
+          <div className={`${s.center} ${s.reveal}`}>
             <span className={s.kicker}>Templates</span>
             <h2 className={s.h2}>Ten ready-made documents</h2>
             <p className={s.lead}>Pick one and go — every template is branded, bilingual, and print-ready.</p>
           </div>
           <div className={s.tplGrid}>
             {TEMPLATES.map((t, i) => (
-              <div className={s.tpl} key={i}>
+              <div className={`${s.tpl} ${s.reveal}`} key={i}>
                 <div className={s.tplIc}>{t.ic}</div>
                 <h4>{t.t}</h4>
                 <p>{t.g}</p>
@@ -193,14 +193,14 @@ export default function Landing() {
       {/* features */}
       <section id="features" className={s.section}>
         <div className={s.wrap}>
-          <div className={s.center}>
+          <div className={`${s.center} ${s.reveal}`}>
             <span className={s.kicker}>Features</span>
             <h2 className={s.h2}>Everything a school office needs</h2>
             <p className={s.lead}>Powerful where it counts, simple everywhere else.</p>
           </div>
           <div className={s.bento}>
             {FEATURES.map((f, i) => (
-              <div className={`${s.feat} ${f.wide ? s.featWide : ""}`} key={i}>
+              <div className={`${s.feat} ${s.reveal} ${f.wide ? s.featWide : ""}`} key={i}>
                 <div className={s.featIc}>{f.ic}</div>
                 <h3>{f.t}</h3>
                 <p>{f.d}</p>
@@ -223,7 +223,7 @@ export default function Landing() {
                 Mix English names with Arabic labels, or go fully Arabic.
               </p>
             </div>
-            <div className={s.biCard}>
+            <div className={`${s.biCard} ${s.reveal}`}>
               <div className={s.biCert}>
                 <div className="k">شهادة تقدير</div>
                 <div className="t">للتميّز في الكتابة</div>
@@ -239,7 +239,7 @@ export default function Landing() {
       {/* faq */}
       <section className={s.section}>
         <div className={s.wrap}>
-          <div className={s.center}>
+          <div className={`${s.center} ${s.reveal}`}>
             <span className={s.kicker}>FAQ</span>
             <h2 className={s.h2}>Questions, answered</h2>
           </div>
@@ -256,7 +256,7 @@ export default function Landing() {
 
       {/* final cta */}
       <section className={s.wrap}>
-        <div className={s.cta}>
+        <div className={`${s.cta} ${s.reveal}`}>
           <h2>Make your first batch in two minutes</h2>
           <p>Free, in your browser, in English or Arabic. Nothing to install.</p>
           <a href="/" className={s.ctaBtn}>Open DocForge <span style={{ width: 18, height: 18 }}>{IC.arrow}</span></a>

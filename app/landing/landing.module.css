@@ -3,6 +3,32 @@
 .page { color: var(--ink); overflow-x: hidden; }
 .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
 
+/* ---------- motion ---------- */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes heroUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes floatY { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes nudgeX { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(5px); } }
+@keyframes sheen { 0% { background-position: -120% 0; } 100% { background-position: 220% 0; } }
+@keyframes popDoc { from { opacity: 0; transform: translateY(16px) scale(.96); } }
+
+/* hero load-in: stagger the left column children */
+.heroText > * { animation: heroUp .6s cubic-bezier(.2, .7, .2, 1) both; }
+.heroText > *:nth-child(1) { animation-delay: .04s; }
+.heroText > *:nth-child(2) { animation-delay: .12s; }
+.heroText > *:nth-child(3) { animation-delay: .20s; }
+.heroText > *:nth-child(4) { animation-delay: .28s; }
+.heroText > *:nth-child(5) { animation-delay: .36s; }
+
+/* scroll reveal — progressive enhancement; content stays visible if unsupported */
+@supports (animation-timeline: view()) {
+  .reveal { opacity: 0; animation: fadeUp .8s cubic-bezier(.2, .7, .2, 1) both; animation-timeline: view(); animation-range: entry 2% cover 26%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .heroText > * { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .docStack, .arrow svg, .csvRow, .doc3, .doc2, .doc1 { animation: none !important; }
+}
+
 /* ---------- nav ---------- */
 .nav {
   position: sticky; top: 0; z-index: 50;
@@ -57,6 +83,7 @@
   position: relative; background: linear-gradient(180deg, #fff, var(--edu-soft));
   border: 1px solid var(--line); border-radius: 20px; padding: 34px; min-height: 360px;
   display: flex; align-items: center; justify-content: center; gap: 18px;
+  animation: heroUp .7s cubic-bezier(.2, .7, .2, 1) .32s both;
 }
 .csvCard {
   background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; width: 170px;
@@ -64,10 +91,15 @@
 }
 .csvHead { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
 .csvHead svg { width: 14px; height: 14px; color: var(--edu); }
-.csvRow { height: 8px; border-radius: 3px; background: var(--edu-soft); margin-bottom: 6px; }
-.csvRow:nth-child(odd) { width: 90%; } .csvRow:nth-child(even) { width: 70%; background: #EFEAE0; }
-.arrow { color: var(--gold); flex-shrink: 0; } .arrow svg { width: 30px; height: 30px; }
-.docStack { position: relative; width: 178px; height: 220px; }
+.csvRow {
+  height: 8px; border-radius: 3px; margin-bottom: 6px;
+  background: linear-gradient(90deg, var(--edu-soft) 0%, #fff 45%, var(--edu-soft) 90%);
+  background-size: 220% 100%; animation: sheen 2.8s linear infinite;
+}
+.csvRow:nth-child(odd) { width: 90%; }
+.csvRow:nth-child(even) { width: 70%; animation-duration: 3.4s; }
+.arrow { color: var(--gold); flex-shrink: 0; } .arrow svg { width: 30px; height: 30px; animation: nudgeX 1.8s ease-in-out infinite; }
+.docStack { position: relative; width: 178px; height: 220px; animation: floatY 5.5s ease-in-out infinite; }
 .doc {
   position: absolute; inset: 0; background: #fff; border: 1px solid var(--line); border-radius: 11px;
   box-shadow: 0 22px 50px -30px rgba(28, 42, 57, .5);
