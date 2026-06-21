@@ -121,7 +121,7 @@ const DEFAULT_ICON = I(<rect x="4" y="4" width="16" height="16" rx="2" />);
 export default function Home() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selected, setSelected] = useState<Template | null>(null);
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [open, setOpen] = useState<1 | 2 | 3>(1);
   const [upload, setUpload] = useState<Upload | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [subjectCols, setSubjectCols] = useState<string[]>([]);
@@ -240,6 +240,7 @@ export default function Home() {
     setSubjectCols([]);
     setFilenamePattern("");
     setPreviewIndex(0);
+    setOpen(2); // picking a template collapses panel 1 and opens upload & map
   }
 
   function toggleSubject(col: string) {
@@ -354,22 +355,16 @@ export default function Home() {
     }
   }
 
-  const stepClass = (n: number) =>
-    "step" + (n === step ? " active" : "") + (n < step ? " done" : "");
   const mappedCols = new Set(Object.values(mapping).filter(Boolean));
-
-  // Group template cards by their `group` label, preserving first-seen order.
-  const grouped = useMemo(() => {
-    const m = new Map<string, Template[]>();
-    for (const t of templates) {
-      const g = t.group ?? "Templates";
-      if (!m.has(g)) m.set(g, []);
-      m.get(g)!.push(t);
-    }
-    return [...m.entries()];
-  }, [templates]);
-
   const recordTotal = upload?.rowCount ?? 0;
+
+  // Accordion: only one panel is expanded; the others collapse to a summary
+  // header. A panel is reachable only once its prerequisites are met.
+  function go(panel: 1 | 2 | 3) {
+    if (panel === 2 && !selected) return;
+    if (panel === 3 && !requiredReady) return;
+    setOpen(panel);
+  }
 
   return (
     <div className="wrap">
@@ -383,27 +378,21 @@ export default function Home() {
         </a>
       </header>
 
-      <div className="stepper">
-        <div className={stepClass(1)}>
-          <span className="dot">1</span> Choose template <span className="arrow">→</span>
-        </div>
-        <div className={stepClass(2)}>
-          <span className="dot">2</span> Upload &amp; map <span className="arrow">→</span>
-        </div>
-        <div className={stepClass(3)}>
-          <span className="dot">3</span> Generate
-        </div>
-      </div>
-
-      {step === 1 && (
-        <div>
-          <h2>Choose a template</h2>
-          <p className="lede">Pick the document you want to make for each student.</p>
-          {grouped.map(([g, ts]) => (
-            <div key={g} style={{ marginBottom: 18 }}>
-              <div className="group-h">{g}</div>
-              <div className="cards">
-                {ts.map((t) => (
+      <div className="acc">
+        {/* Panel 1 — choose template */}
+        <div className={"panel" + (open === 1 ? " open" : "")}>
+          <button className="phead" onClick={() => setOpen(1)}>
+            <span className={"pnum" + (selected ? " done" : "")}>1</span>
+            <span className="ptitle">Choose template</span>
+            {selected && open !== 1 && <span className="psum">{selected.name}</span>}
+          </button>
+          {open === 1 && (
+            <div className="pbody">
+              <p className="lede" style={{ marginTop: 0 }}>
+                Pick the document you want to make for each student.
+              </p>
+              <div className="cards cards-grid">
+                {templates.map((t) => (
                   <div
                     key={t.slug}
                     className={"tcard" + (selected?.slug === t.slug ? " sel" : "")}
@@ -411,6 +400,7 @@ export default function Home() {
                   >
                     <div className="tcard-ic">{TEMPLATE_ICONS[t.slug] ?? DEFAULT_ICON}</div>
                     <div className="tcard-tx">
+                      {t.group && <span className="tcard-grp">{t.group}</span>}
                       <h3>{t.name}</h3>
                       <p>{t.description}</p>
                     </div>
@@ -418,24 +408,23 @@ export default function Home() {
                 ))}
               </div>
             </div>
-          ))}
-          <div className="bar">
-            <span />
-            <button className="btn" disabled={!selected} onClick={() => setStep(2)}>
-              Continue
-            </button>
-          </div>
+          )}
         </div>
-      )}
 
-      {step === 2 && selected && (
-        <div>
-          <h2>Upload your list &amp; map the columns</h2>
-          <p className="lede">
-            Drop in a CSV or Excel file, then tell us which column feeds each field. The preview
-            updates as you go.
-          </p>
-          <div className="two">
+        {/* Panel 2 — upload & map */}
+        <div className={"panel" + (open === 2 ? " open" : "") + (!selected ? " disabled" : "")}>
+          <button className="phead" onClick={() => go(2)} disabled={!selected}>
+            <span className={"pnum" + (requiredReady ? " done" : "")}>2</span>
+            <span className="ptitle">Upload &amp; map</span>
+            {upload && open !== 2 && (
+              <span className="psum">
+                {upload.filename} · {upload.rowCount} rows
+              </span>
+            )}
+          </button>
+          {open === 2 && selected && (
+            <div className="pbody">
+              <div className="two">
             <div className="box">
               <div
                 className={"drop" + (upload || dragOver ? " has" : "")}
@@ -698,24 +687,30 @@ export default function Home() {
               </div>
             </div>
           </div>
-          <div className="bar">
-            <button className="btn ghost" onClick={() => setStep(1)}>
-              Back
-            </button>
-            <button className="btn" disabled={!requiredReady} onClick={() => setStep(3)}>
-              Continue
-            </button>
-          </div>
+              <div className="bar">
+                <button className="btn ghost" onClick={() => setOpen(1)}>
+                  Back
+                </button>
+                <button className="btn" disabled={!requiredReady} onClick={() => go(3)}>
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
 
-      {step === 3 && selected && upload && (
-        <div>
-          <h2>Generate the batch</h2>
-          <p className="lede">
-            Ready to make {upload.rowCount} {selected.name.toLowerCase()} document(s).
-          </p>
-          <div className="box" style={{ maxWidth: 560 }}>
+        {/* Panel 3 — generate */}
+        <div className={"panel" + (open === 3 ? " open" : "") + (!requiredReady ? " disabled" : "")}>
+          <button className="phead" onClick={() => go(3)} disabled={!requiredReady}>
+            <span className="pnum">3</span>
+            <span className="ptitle">Generate</span>
+          </button>
+          {open === 3 && selected && upload && (
+            <div className="pbody">
+              <p className="lede" style={{ marginTop: 0 }}>
+                Ready to make {upload.rowCount} {selected.name.toLowerCase()} document(s).
+              </p>
+              <div className="box" style={{ maxWidth: 560 }}>
             <div className="meta">
               Template: {selected.name} · Rows: {upload.rowCount} · Source: {upload.filename}
               {selected.subjects && ` · Subjects: ${subjectCols.length}`}
@@ -754,7 +749,7 @@ export default function Home() {
             </div>
 
             <div className="bar">
-              <button className="btn ghost" onClick={() => setStep(2)} disabled={genBusy}>
+              <button className="btn ghost" onClick={() => setOpen(2)} disabled={genBusy}>
                 Back
               </button>
               <button className="btn" disabled={genBusy} onClick={generate}>
@@ -774,10 +769,12 @@ export default function Home() {
                 />
               </div>
             )}
-            {genMsg && <div className={"msg " + (genMsg.ok ? "ok" : "err")}>{genMsg.text}</div>}
-          </div>
+                {genMsg && <div className={"msg " + (genMsg.ok ? "ok" : "err")}>{genMsg.text}</div>}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
