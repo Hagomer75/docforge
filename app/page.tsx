@@ -69,6 +69,23 @@ function b64toBlob(b64: string, type = "application/pdf"): Blob {
   return new Blob([arr], { type });
 }
 
+// Trigger a file download. The anchor must be in the DOM and the object URL
+// must outlive the click — revoking it synchronously (or clicking a detached
+// anchor) silently cancels the download in Chromium/Safari.
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 1500);
+}
+
 function readImage(
   file: File,
   onOk: (dataUrl: string) => void,
@@ -419,17 +436,13 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildBody([upload.rows[previewIndex]], previewIndex)),
       });
-      if (!r.ok) throw new Error((await r.json()).error || "Failed.");
+      if (!r.ok) throw new Error((await r.json()).error || t("genFailed"));
       const { files } = (await r.json()) as { files: { name: string; data: string }[] };
       const f = files[0];
-      const url = URL.createObjectURL(b64toBlob(f.data));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${f.name}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      /* surfaced via the batch flow normally; keep single-download quiet */
+      if (!f) throw new Error(t("genFailed"));
+      downloadBlob(b64toBlob(f.data), `${f.name}.pdf`);
+    } catch (err) {
+      setGenMsg({ text: err instanceof Error ? err.message : t("genFailed"), ok: false });
     } finally {
       setSingleBusy(false);
     }
@@ -454,12 +467,7 @@ export default function Home() {
         });
         if (!r.ok) throw new Error((await r.json()).error || t("genFailed"));
         const { files } = (await r.json()) as { files: { name: string; data: string }[] };
-        const url = URL.createObjectURL(b64toBlob(files[0].data));
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `docforge-${selected.slug}-sheet.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
+        downloadBlob(b64toBlob(files[0].data), `docforge-${selected.slug}-sheet.pdf`);
         setGenMsg({ text: t("sheetDone"), ok: true });
         return;
       }
@@ -492,12 +500,7 @@ export default function Home() {
       }
 
       const blob = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `docforge-${selected.slug}.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `docforge-${selected.slug}.zip`);
       setGenMsg({ text: t("doneMsg", { n: upload.rowCount }), ok: true });
     } catch (err) {
       setGenMsg({ text: err instanceof Error ? err.message : t("genFailed"), ok: false });
