@@ -110,18 +110,34 @@ async function certificatePDF(
     borderColor: C.gold, borderWidth: 1,
   });
 
-  // Optional logo + school name stacked above the kicker (kicker sits at 466).
-  const logo = await embedLogo(doc, opts.branding, 46, 170);
+  // Header band: logo + school name on one row, aligned per logoPos, sitting
+  // well above the kicker (466) so they can never overlap.
+  const logo = await embedLogo(doc, opts.branding, 40, 150);
   const school = opts.branding?.schoolName?.trim();
-  let schoolY = 500;
+  const pos = opts.branding?.logoPos ?? "center";
+  const gap = 12;
+  const schoolSize = 14;
+  const bandY = 516;
+  const schoolW = school ? serifB.widthOfTextAtSize(school, schoolSize) : 0;
+  const logoW = logo ? logo.w : 0;
+  const totalW = logoW + (logo && school ? gap : 0) + schoolW;
+  let startX = mid - totalW / 2;
+  if (pos === "left") startX = 60;
+  else if (pos === "right") startX = width - 60 - totalW;
   if (logo) {
-    const top = 548;
     page.drawImage(logo.image, {
-      x: mid - logo.w / 2, y: top - logo.h, width: logo.w, height: logo.h,
+      x: startX, y: bandY - logo.h / 2, width: logo.w, height: logo.h,
     });
-    schoolY = top - logo.h - 13;
   }
-  if (school) drawCentered(page, mid, schoolY, school, serifB, 13, edu);
+  if (school) {
+    page.drawText(school, {
+      x: startX + logoW + (logo ? gap : 0),
+      y: bandY - schoolSize / 2 + 1,
+      size: schoolSize,
+      font: serifB,
+      color: edu,
+    });
+  }
 
   drawCentered(page, mid, 466, spaced("Certificate of Achievement"), sansB, 11, C.gold);
   drawCentered(page, mid, 424, v.award_title || "Award", serifB, 28, edu);

@@ -16,7 +16,13 @@ type Upload = {
   rows: Record<string, string>[];
   rowCount: number;
 };
-type Branding = { schoolName: string; accent: string; logoDataUrl: string | null };
+type LogoPos = "left" | "center" | "right";
+type Branding = {
+  schoolName: string;
+  accent: string;
+  logoDataUrl: string | null;
+  logoPos: LogoPos;
+};
 
 const BATCH_SIZE = 25;
 const DEFAULT_ACCENT = "#2F6F6A";
@@ -46,6 +52,7 @@ export default function Home() {
     schoolName: "",
     accent: DEFAULT_ACCENT,
     logoDataUrl: null,
+    logoPos: "center",
   });
   const [previewHtml, setPreviewHtml] = useState("");
   const [uploadErr, setUploadErr] = useState("");
@@ -402,6 +409,22 @@ export default function Home() {
                     </div>
                   </div>
                   {logoErr && <div className="msg err">{logoErr}</div>}
+                  {selected.slug === "certificate-classic" && (
+                    <div className="maprow">
+                      <label>Header position</label>
+                      <div className="seg" style={{ flex: 1 }}>
+                        {(["left", "center", "right"] as LogoPos[]).map((p) => (
+                          <button
+                            key={p}
+                            className={"seg-btn" + (branding.logoPos === p ? " on" : "")}
+                            onClick={() => setBranding((b) => ({ ...b, logoPos: p }))}
+                          >
+                            {p[0].toUpperCase() + p.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -483,9 +506,17 @@ export default function Home() {
 
 // Only send branding fields that are actually set.
 function brandingPayload(b: Branding) {
-  const out: { schoolName?: string; accent?: string; logoDataUrl?: string } = {};
+  const out: {
+    schoolName?: string;
+    accent?: string;
+    logoDataUrl?: string;
+    logoPos?: LogoPos;
+  } = {};
   if (b.schoolName.trim()) out.schoolName = b.schoolName.trim();
   if (b.accent && b.accent.toLowerCase() !== DEFAULT_ACCENT.toLowerCase()) out.accent = b.accent;
-  if (b.logoDataUrl) out.logoDataUrl = b.logoDataUrl;
+  if (b.logoDataUrl) {
+    out.logoDataUrl = b.logoDataUrl;
+    out.logoPos = b.logoPos;
+  }
   return out;
 }
