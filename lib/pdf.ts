@@ -30,6 +30,13 @@ function hex(h: string): RGB {
   return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 }
 
+// Paint an explicit white page background (pages are transparent by default,
+// which renders wrong on coloured paper / dark viewers / when composited).
+function whiteBg(page: PDFPage) {
+  const { width, height } = page.getSize();
+  page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(1, 1, 1) });
+}
+
 const C = {
   ink: hex("#1C2A39"),
   gold: hex("#C8923A"),
@@ -193,6 +200,7 @@ async function certificatePDF(
 ): Promise<void> {
   const page = doc.addPage([841.89, 595.28]); // A4 landscape
   patchDraw(page);
+  whiteBg(page);
   const { width, height } = page.getSize();
   const edu = accentColor(opts.branding);
   const { serifB, serifI, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
@@ -268,6 +276,7 @@ async function progressReportPDF(
 ): Promise<void> {
   const page = doc.addPage([595.28, 841.89]); // A4 portrait
   patchDraw(page);
+  whiteBg(page);
   const { width, height } = page.getSize();
   const edu = accentColor(opts.branding);
   const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
@@ -352,6 +361,7 @@ async function progressReportPDF(
 async function feeReceiptPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
   const page = doc.addPage([595.28, 841.89]);
   patchDraw(page);
+  whiteBg(page);
   const { width } = page.getSize();
   const edu = accentColor(opts.branding);
   const { sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
@@ -428,6 +438,7 @@ async function cardPDF(
   const W = 360, H = 227;
   const page = doc.addPage([W, H]);
   patchDraw(page);
+  whiteBg(page);
   const edu = accentColor(opts.branding);
   const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
   const D = docLabels(opts.lang ?? "en", opts.labels);
@@ -505,6 +516,7 @@ async function hallPassPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): 
   const W = 400, H = 200;
   const page = doc.addPage([W, H]);
   patchDraw(page);
+  whiteBg(page);
   const edu = accentColor(opts.branding);
   const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
   const D = docLabels(opts.lang ?? "en", opts.labels);
@@ -554,6 +566,7 @@ async function letterPDF(
 ): Promise<void> {
   const page = doc.addPage([595.28, 841.89]);
   patchDraw(page);
+  whiteBg(page);
   const { width } = page.getSize();
   const edu = accentColor(opts.branding);
   const { sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
@@ -725,9 +738,10 @@ export async function renderCardSheet(
   const L = sheetLayout(slug, opts.cardsPerPage ?? 1);
   const perPage = L.cols * L.rows;
   let page = out.addPage([A4.w, A4.h]);
+  whiteBg(page);
   for (let i = 0; i < rows.length; i++) {
     const slot = i % perPage;
-    if (i > 0 && slot === 0) page = out.addPage([A4.w, A4.h]);
+    if (i > 0 && slot === 0) { page = out.addPage([A4.w, A4.h]); whiteBg(page); }
     const col = slot % L.cols;
     const row = Math.floor(slot / L.cols);
     const ox = L.marginX + col * (L.cw + L.gapX);
