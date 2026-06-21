@@ -12,6 +12,7 @@ import { Branding, FieldValues, RenderOpts } from "./templates";
 import { Lang } from "./i18n";
 import { embedDocFonts, shape } from "./arabic";
 import { docLabels } from "./doclabels";
+import { code128b } from "./code128";
 
 // Set per render so the low-level draw/measure helpers can shape Arabic
 // without threading the language through every call.
@@ -430,23 +431,23 @@ type CardCfg = {
   idValue: string;
 };
 
-// fake-but-realistic barcode: vertical bars of varied width seeded by the id
+// Real, scannable Code-128B barcode drawn to fit the given box width, with an
+// 8-module quiet zone each side. `seed` is the payload (e.g. the id value).
 function drawBarcode(
   page: ReturnType<PDFDocument["addPage"]>,
   x: number, y: number, w: number, h: number, seed: string,
 ): void {
-  const s = seed && seed.length ? seed : "00000000";
-  let cx = x;
-  let i = 0;
-  while (cx < x + w - 1) {
-    const code = s.charCodeAt(i % s.length) + i * 7;
-    const bw = 1 + (code % 3);          // bar 1-3pt
-    const gap = 1 + ((code >> 2) % 2);  // gap 1-2pt
-    if (code % 2 === 0 && cx + bw <= x + w) {
-      page.drawRectangle({ x: cx, y, width: bw, height: h, color: C.ink });
-    }
-    cx += bw + gap;
-    i++;
+  const pat = code128b(seed && seed.length ? seed : "00000000");
+  const total = pat.reduce((a, b) => a + b, 0);
+  const qz = 8;
+  const mw = w / (total + qz * 2);
+  let cx = x + qz * mw;
+  let bar = true;
+  for (const run of pat) {
+    const ww = mw * run;
+    if (bar) page.drawRectangle({ x: cx, y, width: ww, height: h, color: C.ink });
+    cx += ww;
+    bar = !bar;
   }
 }
 

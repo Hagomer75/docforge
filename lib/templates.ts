@@ -2,6 +2,22 @@
 // preview. PDF rendering for the same templates lives in ./pdf.ts and shares
 // the same field keys + render options so one mapping drives both.
 import { docLabels } from "./doclabels";
+import { code128b } from "./code128";
+
+// A Code-128B barcode as an inline flex strip of bar/space spans (HTML mirror
+// of the PDF drawBarcode). `ink` colours the bars.
+function barcodeSpans(payload: string, ink: string): string {
+  const pat = code128b(payload && payload.length ? payload : "00000000");
+  const total = pat.reduce((a, b) => a + b, 0);
+  let bar = true;
+  return pat
+    .map((run) => {
+      const span = `<span style="width:${(run / total) * 100}%;background:${bar ? ink : "transparent"}"></span>`;
+      bar = !bar;
+      return span;
+    })
+    .join("");
+}
 
 export type Field = {
   key: string;
@@ -493,7 +509,8 @@ body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;j
 .qrwrap img{width:64px;height:64px;display:block}
 .qrph{width:64px;height:64px;border:1px dashed ${DEFAULTS.line};border-radius:7px;display:flex;align-items:center;justify-content:center;color:${DEFAULTS.muted};font-size:11px}
 .cardfoot{background:${DEFAULTS.paper};border-top:1px solid ${DEFAULTS.line};padding:6px 18px 7px}
-.barcode{height:22px;width:100%;background-image:repeating-linear-gradient(90deg,${DEFAULTS.ink} 0 2px,#fff 2px 3px,${DEFAULTS.ink} 3px 6px,#fff 6px 8px,${DEFAULTS.ink} 8px 9px,#fff 9px 12px,${DEFAULTS.ink} 12px 14px,#fff 14px 15px)}
+.barcode{display:flex;height:22px;width:100%;align-items:stretch}
+.barcode span{display:block;height:100%}
 .bcnum{margin-top:3px;text-align:center;font-size:9px;font-weight:600;letter-spacing:.32em;color:${DEFAULTS.ink};font-variant-numeric:tabular-nums}
 </style></head><body>
 <div class="card">
@@ -513,7 +530,7 @@ body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;j
     <div class="qrwrap">${qr}</div>
   </div>
   <div class="cardfoot">
-    <div class="barcode"></div>
+    <div class="barcode">${barcodeSpans(idValue, DEFAULTS.ink)}</div>
     <div class="bcnum">${esc(idValue)}</div>
   </div>
 </div>

@@ -100,6 +100,9 @@ export const UI: Record<Lang, Dict> = {
     nudgeHint: "These were not in your spreadsheet — the document may have blanks where they belong.",
     photosTitle: "Student photos",
     photoUpload: "Upload photos",
+    photoUploadFolder: "Upload folder",
+    photosDropHint: "or drop a folder of photos here",
+    photosHintName: "Photos can also be named by student name — e.g. Sofia Nguyen.jpg.",
     photoClear: "Clear",
     photosHint: "Upload photos named by the {id} — e.g. STU-001.jpg. Each is matched to a student and printed on the card.",
     photoMatched: "{n} of {total} students matched",
@@ -110,6 +113,8 @@ export const UI: Record<Lang, Dict> = {
     rowPhotoChange: "Change photo",
     rowPhotoClear: "Remove photo",
     photosOr: "Or step through students below and add a photo to each one directly.",
+    hasPhoto: "Has photo",
+    photosHaveCount: "{n} of {total} have photos",
   },
   ar: {
     tagline: "مستندات بالجملة",
@@ -197,6 +202,9 @@ export const UI: Record<Lang, Dict> = {
     nudgeHint: "لم تكن هذه في جدولك — قد يحتوي المستند على فراغات في أماكنها.",
     photosTitle: "صور الطلاب",
     photoUpload: "رفع الصور",
+    photoUploadFolder: "رفع مجلد",
+    photosDropHint: "أو أفلت مجلد صور هنا",
+    photosHintName: "يمكن أيضاً تسمية الصور باسم الطالب — مثل Sofia Nguyen.jpg.",
     photoClear: "مسح",
     photosHint: "ارفع صوراً مسماة بـ {id} — مثل STU-001.jpg. تُطابَق كل صورة بطالب وتُطبع على البطاقة.",
     photoMatched: "تمت مطابقة {n} من {total} طالب",
@@ -207,6 +215,8 @@ export const UI: Record<Lang, Dict> = {
     rowPhotoChange: "تغيير الصورة",
     rowPhotoClear: "إزالة الصورة",
     photosOr: "أو تنقّل بين الطلاب أدناه وأضف صورة لكل واحد مباشرة.",
+    hasPhoto: "بها صورة",
+    photosHaveCount: "{n} من {total} بها صور",
   },
 };
 

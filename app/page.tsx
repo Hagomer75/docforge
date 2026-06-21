@@ -62,6 +62,17 @@ function autoGuess(template: Template, columns: string[]): Record<string, string
   return mapping;
 }
 
+// Normalize a name for photo matching: lowercase, strip accents + punctuation,
+// collapse whitespace. So "Sofía Nguyen.jpg" and a "Sofia Nguyen" cell agree.
+function normName(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
 function b64toBlob(b64: string, type = "application/pdf"): Blob {
   const bin = atob(b64);
   const arr = new Uint8Array(bin.length);
@@ -197,8 +208,10 @@ export default function Home() {
   const [cardsPerPage, setCardsPerPage] = useState<1 | 2 | 4 | 10>(1);
   const [cutGuides, setCutGuides] = useState(true);
   const [photoMap, setPhotoMap] = useState<Record<string, string>>({});
+  const [photoNameMap, setPhotoNameMap] = useState<Record<string, string>>({});
   const [rowPhotos, setRowPhotos] = useState<Record<number, string>>({});
   const [photoErr, setPhotoErr] = useState("");
+  const [photoDrag, setPhotoDrag] = useState(false);
   const [labelOverrides, setLabelOverrides] = useState<{
     en: Record<string, string>;
     ar: Record<string, string>;
@@ -209,6 +222,7 @@ export default function Home() {
   const logoInput = useRef<HTMLInputElement>(null);
   const sigInput = useRef<HTMLInputElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
+  const photoFolderInput = useRef<HTMLInputElement>(null);
   const rowPhotoInput = useRef<HTMLInputElement>(null);
   const { t, lang } = useI18n();
 
@@ -319,7 +333,7 @@ export default function Home() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex, lang, labelOverrides, photoMap, rowPhotos]);
+  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex, lang, labelOverrides, photoMap, photoNameMap, rowPhotos]);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -366,6 +380,7 @@ export default function Home() {
     setPreviewIndex(0);
     setCardsPerPage(1); // reset sheet mode when switching templates
     setPhotoMap({}); // photos are matched per template's ID field
+    setPhotoNameMap({});
     setRowPhotos({});
     setOpen(2); // picking a template collapses panel 1 and opens upload & map
   }
@@ -516,24 +531,53 @@ export default function Home() {
   const perPageOptions: (1 | 2 | 4 | 10)[] =
     selected?.slug === "hall-pass" ? [1, 2, 4] : [1, 2, 4, 10];
 
-  // Bulk student photos: match an uploaded image's filename to the ID-field value.
+  // Bulk student photos: match an uploaded image's filename to the ID value or
+  // to the student's name. PHOTO_COL is the synthetic column the photo lands in.
   const PHOTO_COL = "__photo__";
   const photoMatchCol = selected?.qrField ? mapping[selected.qrField] : "";
   const photoMatchField = selected?.qrField
     ? selected.fields.find((f) => f.key === selected.qrField)
     : undefined;
   const photoFieldLabel = photoMatchField ? tf(photoMatchField) : "";
+  // The first required field is the person's name (full_name / recipient_name).
+  const photoNameField = selected?.fields.find((f) => f.required);
+  const photoNameCol = photoNameField ? mapping[photoNameField.key] : "";
+  const canUploadPhotos = !!photoMatchCol || !!photoNameCol;
   const photoCount = useMemo(() => {
-    if (!upload || !photoMatchCol) return 0;
+    if (!upload) return 0;
     let n = 0;
     for (const r of upload.rows) {
-      const k = String(r[photoMatchCol] ?? "").trim().toLowerCase();
-      if (k && photoMap[k]) n++;
+      const idKey = photoMatchCol ? String(r[photoMatchCol] ?? "").trim().toLowerCase() : "";
+      const nmKey = photoNameCol ? normName(String(r[photoNameCol] ?? "")) : "";
+      if ((idKey && photoMap[idKey]) || (nmKey && photoNameMap[nmKey])) n++;
     }
     return n;
-  }, [upload, photoMatchCol, photoMap]);
+  }, [upload, photoMatchCol, photoNameCol, photoMap, photoNameMap]);
 
-  const hasAnyPhoto = Object.keys(photoMap).length > 0 || Object.keys(rowPhotos).length > 0;
+  const hasAnyPhoto =
+    Object.keys(photoMap).length > 0 ||
+    Object.keys(photoNameMap).length > 0 ||
+    Object.keys(rowPhotos).length > 0;
+
+  // Does the row at this absolute index resolve to a photo? Mirrors withPhotos'
+  // precedence (per-row > id-filename > name) so the dot agrees with what prints.
+  function recordHasPhoto(idx: number): boolean {
+    if (!selected?.photoField || !upload) return false;
+    if (rowPhotos[idx]) return true;
+    const r = upload.rows[idx];
+    if (!r) return false;
+    const idKey = photoMatchCol ? String(r[photoMatchCol] ?? "").trim().toLowerCase() : "";
+    if (idKey && photoMap[idKey]) return true;
+    const nmKey = photoNameCol ? normName(String(r[photoNameCol] ?? "")) : "";
+    return !!(nmKey && photoNameMap[nmKey]);
+  }
+  const photosHaveCount = useMemo(() => {
+    if (!upload || !selected?.photoField) return 0;
+    let n = 0;
+    for (let i = 0; i < upload.rows.length; i++) if (recordHasPhoto(i)) n++;
+    return n;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [upload, selected, photoMatchCol, photoNameCol, photoMap, photoNameMap, rowPhotos]);
   function effMapping(): Record<string, string> {
     if (selected?.photoField && hasAnyPhoto && !mapping[selected.photoField]) {
       return { ...mapping, [selected.photoField]: PHOTO_COL };
@@ -550,10 +594,13 @@ export default function Home() {
     const col = mapping[selected.photoField] || PHOTO_COL;
     return rows.map((r, i) => {
       const direct = rowPhotos[baseIndex + i];
-      const byName = photoMatchCol
+      const byId = photoMatchCol
         ? photoMap[String(r[photoMatchCol] ?? "").trim().toLowerCase()]
         : undefined;
-      const data = direct || byName;
+      const byPersonName = !byId && photoNameCol
+        ? photoNameMap[normName(String(r[photoNameCol] ?? ""))]
+        : undefined;
+      const data = direct || byId || byPersonName;
       return data ? { ...r, [col]: data } : r;
     });
   }
@@ -583,17 +630,25 @@ export default function Home() {
     }
     let done = 0;
     const next: Record<string, string> = {};
+    const nextName: Record<string, string> = {};
+    const commit = () => {
+      if (Object.keys(next).length) setPhotoMap((m) => ({ ...m, ...next }));
+      if (Object.keys(nextName).length) setPhotoNameMap((m) => ({ ...m, ...nextName }));
+    };
     imgs.forEach((f) => {
       if (f.size > 2 * 1024 * 1024) {
         done++;
-        if (done === imgs.length && Object.keys(next).length) setPhotoMap((m) => ({ ...m, ...next }));
+        if (done === imgs.length) commit();
         return;
       }
       const reader = new FileReader();
       reader.onload = () => {
-        next[f.name.replace(/\.[^.]+$/, "").trim().toLowerCase()] = reader.result as string;
+        // f.name is the basename even for folder picks (webkitRelativePath ignored).
+        const base = f.name.replace(/\.[^.]+$/, "").trim();
+        next[base.toLowerCase()] = reader.result as string;
+        nextName[normName(base)] = reader.result as string;
         done++;
-        if (done === imgs.length) setPhotoMap((m) => ({ ...m, ...next }));
+        if (done === imgs.length) commit();
       };
       reader.readAsDataURL(f);
     });
@@ -972,7 +1027,7 @@ export default function Home() {
               {upload && selected.photoField && (
                 <div className="section">
                   <div className="section-h">{t("photosTitle")}</div>
-                  {!photoMatchCol ? (
+                  {!canUploadPhotos ? (
                     <>
                       <p className="hint" style={{ marginTop: 0 }}>
                         {fmt(t("photoNeedMatch"), { id: photoFieldLabel })}
@@ -983,20 +1038,41 @@ export default function Home() {
                     </>
                   ) : (
                     <>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <button className="btn ghost small" onClick={() => photoInput.current?.click()}>
-                          {t("photoUpload")}
-                        </button>
-                        {photoCount > 0 && (
-                          <span className="chip on">
-                            {fmt(t("photoMatched"), { n: photoCount, total: upload.rowCount })}
-                          </span>
-                        )}
-                        {Object.keys(photoMap).length > 0 && (
-                          <button className="btn ghost small" onClick={() => { setPhotoMap({}); setPhotoErr(""); }}>
-                            {t("photoClear")}
+                      <div
+                        className={"drop" + (photoDrag ? " has" : "")}
+                        style={{ padding: 12 }}
+                        onDragOver={(e) => { e.preventDefault(); setPhotoDrag(true); }}
+                        onDragLeave={() => setPhotoDrag(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setPhotoDrag(false);
+                          if (e.dataTransfer.files?.length) handlePhotos(e.dataTransfer.files);
+                        }}
+                      >
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <button className="btn ghost small" onClick={() => photoInput.current?.click()}>
+                            {t("photoUpload")}
                           </button>
-                        )}
+                          <button className="btn ghost small" onClick={() => photoFolderInput.current?.click()}>
+                            {t("photoUploadFolder")}
+                          </button>
+                          {photoCount > 0 && (
+                            <span className="chip on">
+                              {fmt(t("photoMatched"), { n: photoCount, total: upload.rowCount })}
+                            </span>
+                          )}
+                          {(Object.keys(photoMap).length > 0 || Object.keys(photoNameMap).length > 0) && (
+                            <button
+                              className="btn ghost small"
+                              onClick={() => { setPhotoMap({}); setPhotoNameMap({}); setPhotoErr(""); }}
+                            >
+                              {t("photoClear")}
+                            </button>
+                          )}
+                        </div>
+                        <p className="hint" style={{ marginTop: 8, marginBottom: 0 }}>
+                          {t("photosDropHint")}
+                        </p>
                         <input
                           ref={photoInput}
                           type="file"
@@ -1008,11 +1084,27 @@ export default function Home() {
                             e.target.value = "";
                           }}
                         />
+                        <input
+                          ref={photoFolderInput}
+                          type="file"
+                          accept=".png,.jpg,.jpeg"
+                          hidden
+                          {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+                          onChange={(e) => {
+                            if (e.target.files?.length) handlePhotos(e.target.files);
+                            e.target.value = "";
+                          }}
+                        />
                       </div>
                       {photoErr && <div className="msg err">{photoErr}</div>}
                       <p className="hint" style={{ marginTop: 8 }}>
-                        {fmt(t("photosHint"), { id: photoFieldLabel })}
+                        {photoMatchCol ? fmt(t("photosHint"), { id: photoFieldLabel }) : t("photosHintName")}
                       </p>
+                      {photoMatchCol && (
+                        <p className="hint" style={{ marginTop: 4 }}>
+                          {t("photosHintName")}
+                        </p>
+                      )}
                       <p className="hint" style={{ marginTop: 4 }}>
                         {t("photosOr")}
                       </p>
@@ -1082,6 +1174,9 @@ export default function Home() {
                       </button>
                       <span className="pvcount">
                         {t("recordOf", { i: previewIndex + 1, n: recordTotal })}
+                        {recordHasPhoto(previewIndex) && (
+                          <span className="pvdot" title={t("hasPhoto")} aria-label={t("hasPhoto")} />
+                        )}
                       </span>
                       <button
                         className="pvnav"
@@ -1095,6 +1190,9 @@ export default function Home() {
                   <div className="pvactions">
                     {selected.photoField && (
                       <>
+                        <span className="pvsummary">
+                          {t("photosHaveCount", { n: photosHaveCount, total: recordTotal })}
+                        </span>
                         <button
                           className={"btn ghost small" + (rowPhotos[previewIndex] ? " on" : "")}
                           onClick={() => rowPhotoInput.current?.click()}
