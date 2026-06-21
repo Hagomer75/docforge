@@ -3,13 +3,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Field = { key: string; label: string; required: boolean };
-type Template = { slug: string; name: string; description: string; fields: Field[] };
+type Template = {
+  slug: string;
+  name: string;
+  description: string;
+  fields: Field[];
+  subjects?: boolean;
+};
 type Upload = {
   filename: string;
   columns: string[];
   rows: Record<string, string>[];
   rowCount: number;
 };
+type Branding = { schoolName: string; accent: string; logoDataUrl: string | null };
+
+const BATCH_SIZE = 25;
+const DEFAULT_ACCENT = "#2F6F6A";
 
 function autoGuess(template: Template, columns: string[]): Record<string, string> {
   const mapping: Record<string, string> = {};
@@ -31,12 +41,21 @@ export default function Home() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [upload, setUpload] = useState<Upload | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [subjectCols, setSubjectCols] = useState<string[]>([]);
+  const [branding, setBranding] = useState<Branding>({
+    schoolName: "",
+    accent: DEFAULT_ACCENT,
+    logoDataUrl: null,
+  });
   const [previewHtml, setPreviewHtml] = useState("");
   const [uploadErr, setUploadErr] = useState("");
+  const [logoErr, setLogoErr] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
+  const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
   const [genMsg, setGenMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const logoInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/templates")
@@ -50,7 +69,7 @@ export default function Home() {
   const nameMapped =
     selected != null && selected.fields.some((f) => f.required && mapping[f.key]);
 
-  // Live preview of the first row, debounced.
+  // Live preview of the first row, debounced. Reflects mapping, subjects, branding.
   useEffect(() => {
     if (!selected || !upload || !nameMapped) {
       setPreviewHtml("");
@@ -64,6 +83,8 @@ export default function Home() {
           body: JSON.stringify({
             templateSlug: selected.slug,
             mapping,
+            subjectColumns: subjectCols,
+            branding: brandingPayload(branding),
             row: upload.rows[0],
           }),
         });
@@ -72,9 +93,9 @@ export default function Home() {
       } catch {
         /* preview is best-effort */
       }
-    }, 250);
+    }, 300);
     return () => clearTimeout(t);
-  }, [selected, upload, mapping, nameMapped]);
+  }, [selected, upload, mapping, subjectCols, branding, nameMapped]);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -90,6 +111,7 @@ export default function Home() {
         }
         setUpload(data);
         setMapping(selected ? autoGuess(selected, data.columns) : {});
+        setSubjectCols([]);
       } catch {
         setUploadErr("Could not read that file.");
       }
@@ -97,26 +119,75 @@ export default function Home() {
     [selected]
   );
 
+  function handleLogo(file: File) {
+    setLogoErr("");
+    if (!/\.(png|jpe?g)$/i.test(file.name)) {
+      setLogoErr("Logo must be a PNG or JPG.");
+      return;
+    }
+    if (file.size > 600 * 1024) {
+      setLogoErr("Logo must be under 600 KB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () =>
+      setBranding((b) => ({ ...b, logoDataUrl: reader.result as string }));
+    reader.readAsDataURL(file);
+  }
+
   function chooseTemplate(t: Template) {
     setSelected(t);
     if (upload) setMapping(autoGuess(t, upload.columns));
+    setSubjectCols([]);
+  }
+
+  function toggleSubject(col: string) {
+    setSubjectCols((cur) =>
+      cur.includes(col) ? cur.filter((c) => c !== col) : [...cur, col]
+    );
   }
 
   async function generate() {
     if (!selected || !upload) return;
     setGenBusy(true);
     setGenMsg(null);
+    setGenProgress({ done: 0, total: upload.rowCount });
     try {
-      const r = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateSlug: selected.slug, mapping, rows: upload.rows }),
-      });
-      if (!r.ok) {
-        const e = await r.json();
-        throw new Error(e.error || "Generation failed.");
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      const used = new Map<string, number>();
+      const rows = upload.rows;
+
+      for (let start = 0; start < rows.length; start += BATCH_SIZE) {
+        const batch = rows.slice(start, start + BATCH_SIZE);
+        const r = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            templateSlug: selected.slug,
+            mapping,
+            subjectColumns: subjectCols,
+            branding: brandingPayload(branding),
+            rows: batch,
+            startIndex: start,
+          }),
+        });
+        if (!r.ok) {
+          const e = await r.json();
+          throw new Error(e.error || "Generation failed.");
+        }
+        const { files } = (await r.json()) as { files: { name: string; data: string }[] };
+        for (const f of files) {
+          let name = f.name;
+          const n = used.get(name) ?? 0;
+          used.set(name, n + 1);
+          if (n > 0) name = `${name}-${n + 1}`;
+          zip.file(`${selected.slug}/${name}.pdf`, f.data, { base64: true });
+        }
+        setGenProgress({ done: Math.min(start + batch.length, rows.length), total: rows.length });
       }
-      const blob = await r.blob();
+
+      const blob = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -128,11 +199,15 @@ export default function Home() {
       setGenMsg({ text: err instanceof Error ? err.message : "Generation failed.", ok: false });
     } finally {
       setGenBusy(false);
+      setGenProgress(null);
     }
   }
 
   const stepClass = (n: number) =>
     "step" + (n === step ? " active" : "") + (n < step ? " done" : "");
+
+  // Columns still available to use as subjects (not already a mapped field).
+  const mappedCols = new Set(Object.values(mapping).filter(Boolean));
 
   return (
     <div className="wrap">
@@ -243,6 +318,93 @@ export default function Home() {
                 </div>
               )}
 
+              {upload && selected.subjects && (
+                <div className="section">
+                  <div className="section-h">Subjects</div>
+                  <p className="hint" style={{ marginTop: 0 }}>
+                    Tick the columns that hold marks. Each becomes a row on the report.
+                  </p>
+                  <div className="chips">
+                    {upload.columns
+                      .filter((c) => !mappedCols.has(c))
+                      .map((c) => (
+                        <label
+                          key={c}
+                          className={"chip" + (subjectCols.includes(c) ? " on" : "")}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={subjectCols.includes(c)}
+                            onChange={() => toggleSubject(c)}
+                          />
+                          {c}
+                        </label>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {upload && (
+                <div className="section">
+                  <div className="section-h">Branding (optional)</div>
+                  <div className="maprow">
+                    <label>School name</label>
+                    <input
+                      className="text"
+                      type="text"
+                      placeholder="Springfield Elementary"
+                      value={branding.schoolName}
+                      onChange={(e) =>
+                        setBranding((b) => ({ ...b, schoolName: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="maprow">
+                    <label>Accent colour</label>
+                    <input
+                      type="color"
+                      value={branding.accent}
+                      onChange={(e) =>
+                        setBranding((b) => ({ ...b, accent: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="maprow">
+                    <label>Logo (PNG/JPG)</label>
+                    <div style={{ flex: 1, display: "flex", gap: 8, alignItems: "center" }}>
+                      <button
+                        className="btn ghost small"
+                        onClick={() => logoInput.current?.click()}
+                      >
+                        {branding.logoDataUrl ? "Change" : "Upload"}
+                      </button>
+                      {branding.logoDataUrl && (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img className="logo-prev" src={branding.logoDataUrl} alt="logo" />
+                          <button
+                            className="btn ghost small"
+                            onClick={() => setBranding((b) => ({ ...b, logoDataUrl: null }))}
+                          >
+                            Remove
+                          </button>
+                        </>
+                      )}
+                      <input
+                        ref={logoInput}
+                        type="file"
+                        accept=".png,.jpg,.jpeg"
+                        hidden
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) handleLogo(e.target.files[0]);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {logoErr && <div className="msg err">{logoErr}</div>}
+                </div>
+              )}
+
               {uploadErr && <div className="msg err">{uploadErr}</div>}
               {!upload && (
                 <div className="hint">
@@ -285,20 +447,45 @@ export default function Home() {
           <div className="box" style={{ maxWidth: 520 }}>
             <div className="meta">
               Template: {selected.name} · Rows: {upload.rowCount} · Source: {upload.filename}
+              {selected.subjects && ` · Subjects: ${subjectCols.length}`}
+              {branding.schoolName && ` · ${branding.schoolName}`}
             </div>
             <div className="bar">
-              <button className="btn ghost" onClick={() => setStep(2)}>
+              <button className="btn ghost" onClick={() => setStep(2)} disabled={genBusy}>
                 Back
               </button>
               <button className="btn" disabled={genBusy} onClick={generate}>
                 {genBusy && <span className="spin" />}
-                {genBusy ? "Generating…" : "Generate & download ZIP"}
+                {genBusy
+                  ? genProgress
+                    ? `Generating ${genProgress.done}/${genProgress.total}…`
+                    : "Generating…"
+                  : "Generate & download ZIP"}
               </button>
             </div>
+            {genProgress && (
+              <div className="progress">
+                <div
+                  className="progress-bar"
+                  style={{
+                    width: `${Math.round((genProgress.done / genProgress.total) * 100)}%`,
+                  }}
+                />
+              </div>
+            )}
             {genMsg && <div className={"msg " + (genMsg.ok ? "ok" : "err")}>{genMsg.text}</div>}
           </div>
         </div>
       )}
     </div>
   );
+}
+
+// Only send branding fields that are actually set.
+function brandingPayload(b: Branding) {
+  const out: { schoolName?: string; accent?: string; logoDataUrl?: string } = {};
+  if (b.schoolName.trim()) out.schoolName = b.schoolName.trim();
+  if (b.accent && b.accent.toLowerCase() !== DEFAULT_ACCENT.toLowerCase()) out.accent = b.accent;
+  if (b.logoDataUrl) out.logoDataUrl = b.logoDataUrl;
+  return out;
 }

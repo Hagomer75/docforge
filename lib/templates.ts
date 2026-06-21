@@ -1,6 +1,6 @@
 // Template definitions: field schema + HTML rendering used for the live
 // preview. PDF rendering for the same templates lives in ./pdf.ts and shares
-// the same field keys so a single column mapping drives both.
+// the same field keys + render options so one mapping drives both.
 
 export type Field = {
   key: string;
@@ -13,6 +13,9 @@ export type Template = {
   name: string;
   description: string;
   fields: Field[];
+  // When true the UI lets the user pick spreadsheet columns to render as
+  // subject/mark rows (flexible report cards).
+  subjects?: boolean;
 };
 
 export const TEMPLATES: Template[] = [
@@ -33,13 +36,11 @@ export const TEMPLATES: Template[] = [
     slug: "progress-report",
     name: "Progress report",
     description: "Per-subject marks + comment, A4 portrait",
+    subjects: true,
     fields: [
       { key: "student_name", label: "Student name", required: true },
       { key: "class_name", label: "Class", required: false },
       { key: "term", label: "Term", required: false },
-      { key: "math", label: "Mathematics mark", required: false },
-      { key: "english", label: "English mark", required: false },
-      { key: "science", label: "Science mark", required: false },
       { key: "comment", label: "Teacher comment", required: false },
       { key: "teacher", label: "Teacher", required: false },
       { key: "date", label: "Date", required: false },
@@ -52,8 +53,15 @@ export function getTemplate(slug: string): Template | undefined {
 }
 
 export type FieldValues = Record<string, string>;
+export type Subject = { label: string; mark: string };
+export type Branding = {
+  schoolName?: string;
+  accent?: string; // hex, e.g. "#2F6F6A"
+  logoDataUrl?: string; // data:image/...;base64,...
+};
+export type RenderOpts = { subjects?: Subject[]; branding?: Branding };
 
-// Resolve a single data row into field values using the column mapping.
+// Resolve a single data row into scalar field values using the column mapping.
 export function resolveValues(
   template: Template,
   mapping: Record<string, string>,
@@ -68,6 +76,17 @@ export function resolveValues(
   return values;
 }
 
+// Resolve the chosen subject columns into label/mark pairs for one row.
+export function resolveSubjects(
+  subjectColumns: string[],
+  row: Record<string, unknown>
+): Subject[] {
+  return (subjectColumns ?? []).map((col) => {
+    const raw = row[col];
+    return { label: col, mark: raw == null ? "" : String(raw).trim() };
+  });
+}
+
 function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -76,7 +95,7 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-const BRAND = {
+const DEFAULTS = {
   ink: "#1C2A39",
   paper: "#FBFAF7",
   edu: "#2F6F6A",
@@ -87,24 +106,40 @@ const BRAND = {
 
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap');`;
 
-function certificateHTML(v: FieldValues): string {
+// Validate/normalise an accent so a bad value can't break rendering.
+function accentOf(branding?: Branding): string {
+  const a = branding?.accent;
+  return a && /^#[0-9a-fA-F]{6}$/.test(a) ? a : DEFAULTS.edu;
+}
+
+function logoTag(branding: Branding | undefined, maxH: number): string {
+  if (!branding?.logoDataUrl) return "";
+  return `<img src="${branding.logoDataUrl}" style="max-height:${maxH}px;max-width:200px;object-fit:contain" alt="logo">`;
+}
+
+function certificateHTML(v: FieldValues, opts: RenderOpts): string {
+  const edu = accentOf(opts.branding);
+  const school = opts.branding?.schoolName?.trim();
+  const logo = logoTag(opts.branding, 56);
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 ${FONTS}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
-body{font-family:'Inter',sans-serif;color:${BRAND.ink};background:#fff;display:flex;align-items:center;justify-content:center;padding:18px}
-.cert{width:100%;max-width:760px;aspect-ratio:1.414/1;border:3px solid ${BRAND.edu};padding:10px}
-.inner{height:100%;border:1px solid ${BRAND.gold};padding:7% 9%;display:flex;flex-direction:column;align-items:center;text-align:center}
-.kicker{font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:${BRAND.gold};font-weight:600}
-.title{font-family:'Fraunces',serif;font-weight:700;font-size:30px;color:${BRAND.edu};margin:8px 0 18px}
-.intro{font-size:13px;color:${BRAND.muted};letter-spacing:.04em}
-.name{font-family:'Fraunces',serif;font-weight:600;font-size:34px;margin:10px 0;border-bottom:2px solid ${BRAND.line};padding-bottom:8px;min-width:60%}
-.award{font-size:15px;font-weight:600;margin-top:14px}
-.detail{font-size:13px;color:${BRAND.muted};font-style:italic;margin-top:6px;max-width:80%}
-.foot{margin-top:auto;display:flex;justify-content:space-between;width:100%;padding-top:22px;font-size:12px;color:${BRAND.muted}}
-.foot b{display:block;color:${BRAND.ink};font-weight:600;border-top:1px solid ${BRAND.line};padding-top:5px;min-width:120px}
+body{font-family:'Inter',sans-serif;color:${DEFAULTS.ink};background:#fff;display:flex;align-items:center;justify-content:center;padding:18px}
+.cert{width:100%;max-width:760px;aspect-ratio:1.414/1;border:3px solid ${edu};padding:10px}
+.inner{height:100%;border:1px solid ${DEFAULTS.gold};padding:5% 9% 6%;display:flex;flex-direction:column;align-items:center;text-align:center}
+.brand{display:flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:6px;min-height:10px}
+.brand .sn{font-family:'Fraunces',serif;font-weight:600;font-size:13px;color:${edu};letter-spacing:.04em}
+.kicker{font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:${DEFAULTS.gold};font-weight:600}
+.title{font-family:'Fraunces',serif;font-weight:700;font-size:28px;color:${edu};margin:6px 0 16px}
+.intro{font-size:13px;color:${DEFAULTS.muted};letter-spacing:.04em}
+.name{font-family:'Fraunces',serif;font-weight:600;font-size:32px;margin:8px 0;border-bottom:2px solid ${DEFAULTS.line};padding-bottom:8px;min-width:60%}
+.detail{font-size:13px;color:${DEFAULTS.muted};font-style:italic;margin-top:6px;max-width:80%}
+.foot{margin-top:auto;display:flex;justify-content:space-between;width:100%;padding-top:20px;font-size:12px;color:${DEFAULTS.muted}}
+.foot b{display:block;color:${DEFAULTS.ink};font-weight:600;border-top:1px solid ${DEFAULTS.line};padding-top:5px;min-width:120px}
 </style></head><body>
 <div class="cert"><div class="inner">
+  <div class="brand">${logo}${school ? `<span class="sn">${esc(school)}</span>` : ""}</div>
   <div class="kicker">Certificate of Achievement</div>
   <div class="title">${esc(v.award_title) || "Award"}</div>
   <div class="intro">This certificate is proudly presented to</div>
@@ -119,34 +154,44 @@ body{font-family:'Inter',sans-serif;color:${BRAND.ink};background:#fff;display:f
 </body></html>`;
 }
 
-function progressReportHTML(v: FieldValues): string {
-  const rows = [
-    ["Mathematics", v.math],
-    ["English", v.english],
-    ["Science", v.science],
-  ];
+function progressReportHTML(v: FieldValues, opts: RenderOpts): string {
+  const edu = accentOf(opts.branding);
+  const school = opts.branding?.schoolName?.trim();
+  const logo = logoTag(opts.branding, 40);
+  const subjects = opts.subjects ?? [];
+  const rowsHtml =
+    subjects.length === 0
+      ? `<tr><td colspan="2" style="color:${DEFAULTS.muted}">No subjects selected — pick subject columns to fill this table.</td></tr>`
+      : subjects
+          .map(
+            (s) =>
+              `<tr><td>${esc(s.label)}</td><td class="mark">${esc(s.mark || "—")}</td></tr>`
+          )
+          .join("");
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 ${FONTS}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;color:${BRAND.ink};background:#fff;padding:34px 40px}
-.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid ${BRAND.edu};padding-bottom:12px}
-.head h1{font-family:'Fraunces',serif;font-weight:700;font-size:22px;color:${BRAND.edu}}
-.head .meta{text-align:right;font-size:12px;color:${BRAND.muted}}
+body{font-family:'Inter',sans-serif;color:${DEFAULTS.ink};background:#fff;padding:34px 40px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid ${edu};padding-bottom:12px}
+.head .l{display:flex;align-items:center;gap:12px}
+.head h1{font-family:'Fraunces',serif;font-weight:700;font-size:22px;color:${edu}}
+.head .sn{font-size:12px;color:${DEFAULTS.muted}}
+.head .meta{text-align:right;font-size:12px;color:${DEFAULTS.muted}}
 .who{margin:18px 0;display:flex;gap:26px;font-size:14px}
-.who .lbl{color:${BRAND.muted};font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+.who .lbl{color:${DEFAULTS.muted};font-size:11px;text-transform:uppercase;letter-spacing:.1em}
 .who b{font-size:16px;font-weight:600}
 table{width:100%;border-collapse:collapse;margin-top:6px;font-size:14px}
-th,td{text-align:left;padding:10px 12px;border-bottom:1px solid ${BRAND.line}}
-th{background:${BRAND.paper};color:${BRAND.muted};font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid ${DEFAULTS.line}}
+th{background:${DEFAULTS.paper};color:${DEFAULTS.muted};font-size:11px;text-transform:uppercase;letter-spacing:.08em}
 td.mark{font-weight:600;text-align:right}
-.comment{margin-top:20px;border:1px solid ${BRAND.line};border-radius:8px;padding:14px 16px;background:${BRAND.paper}}
-.comment .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:${BRAND.gold};font-weight:600;margin-bottom:6px}
+.comment{margin-top:20px;border:1px solid ${DEFAULTS.line};border-radius:8px;padding:14px 16px;background:${DEFAULTS.paper}}
+.comment .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:${DEFAULTS.gold};font-weight:600;margin-bottom:6px}
 .comment p{font-size:13.5px;line-height:1.6}
-.sign{margin-top:34px;display:flex;justify-content:space-between;font-size:12px;color:${BRAND.muted}}
-.sign b{display:block;color:${BRAND.ink};border-top:1px solid ${BRAND.line};padding-top:5px;min-width:150px}
+.sign{margin-top:34px;display:flex;justify-content:space-between;font-size:12px;color:${DEFAULTS.muted}}
+.sign b{display:block;color:${DEFAULTS.ink};border-top:1px solid ${DEFAULTS.line};padding-top:5px;min-width:150px}
 </style></head><body>
 <div class="head">
-  <h1>Progress Report</h1>
+  <div class="l">${logo}<div><h1>Progress Report</h1>${school ? `<div class="sn">${esc(school)}</div>` : ""}</div></div>
   <div class="meta">${esc(v.term) || ""}<br>${esc(v.date) || ""}</div>
 </div>
 <div class="who">
@@ -155,14 +200,7 @@ td.mark{font-weight:600;text-align:right}
 </div>
 <table>
   <thead><tr><th>Subject</th><th style="text-align:right">Mark</th></tr></thead>
-  <tbody>
-    ${rows
-      .map(
-        ([s, m]) =>
-          `<tr><td>${s}</td><td class="mark">${esc(m || "—")}</td></tr>`
-      )
-      .join("")}
-  </tbody>
+  <tbody>${rowsHtml}</tbody>
 </table>
 <div class="comment">
   <div class="lbl">Teacher's comment</div>
@@ -175,7 +213,7 @@ td.mark{font-weight:600;text-align:right}
 </body></html>`;
 }
 
-export function renderHTML(slug: string, v: FieldValues): string {
-  if (slug === "progress-report") return progressReportHTML(v);
-  return certificateHTML(v);
+export function renderHTML(slug: string, v: FieldValues, opts: RenderOpts = {}): string {
+  if (slug === "progress-report") return progressReportHTML(v, opts);
+  return certificateHTML(v, opts);
 }
