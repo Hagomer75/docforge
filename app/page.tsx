@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Field = { key: string; label: string; required: boolean };
 type Template = {
@@ -9,6 +9,8 @@ type Template = {
   description: string;
   fields: Field[];
   subjects?: boolean;
+  qrField?: string;
+  group?: string;
 };
 type Upload = {
   filename: string;
@@ -22,10 +24,19 @@ type Branding = {
   accent: string;
   logoDataUrl: string | null;
   logoPos: LogoPos;
+  signatureDataUrl: string | null;
 };
 
 const BATCH_SIZE = 25;
 const DEFAULT_ACCENT = "#2F6F6A";
+const PRESET_KEY = "docforge:branding";
+const EMPTY_BRANDING: Branding = {
+  schoolName: "",
+  accent: DEFAULT_ACCENT,
+  logoDataUrl: null,
+  logoPos: "center",
+  signatureDataUrl: null,
+};
 
 function autoGuess(template: Template, columns: string[]): Record<string, string> {
   const mapping: Record<string, string> = {};
@@ -41,6 +52,25 @@ function autoGuess(template: Template, columns: string[]): Record<string, string
   return mapping;
 }
 
+function b64toBlob(b64: string, type = "application/pdf"): Blob {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type });
+}
+
+function readImage(
+  file: File,
+  onOk: (dataUrl: string) => void,
+  onErr: (msg: string) => void
+) {
+  if (!/\.(png|jpe?g)$/i.test(file.name)) return onErr("Must be a PNG or JPG.");
+  if (file.size > 600 * 1024) return onErr("Must be under 600 KB.");
+  const reader = new FileReader();
+  reader.onload = () => onOk(reader.result as string);
+  reader.readAsDataURL(file);
+}
+
 export default function Home() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selected, setSelected] = useState<Template | null>(null);
@@ -48,40 +78,70 @@ export default function Home() {
   const [upload, setUpload] = useState<Upload | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [subjectCols, setSubjectCols] = useState<string[]>([]);
-  const [branding, setBranding] = useState<Branding>({
-    schoolName: "",
-    accent: DEFAULT_ACCENT,
-    logoDataUrl: null,
-    logoPos: "center",
-  });
+  const [branding, setBranding] = useState<Branding>(EMPTY_BRANDING);
+  const [filenamePattern, setFilenamePattern] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [uploadErr, setUploadErr] = useState("");
   const [logoErr, setLogoErr] = useState("");
+  const [sigErr, setSigErr] = useState("");
+  const [presetMsg, setPresetMsg] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
+  const [singleBusy, setSingleBusy] = useState(false);
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
   const [genMsg, setGenMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const logoInput = useRef<HTMLInputElement>(null);
+  const sigInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/templates")
       .then((r) => r.json())
       .then(setTemplates)
       .catch(() => setTemplates([]));
+    // Restore a saved branding preset.
+    try {
+      const raw = localStorage.getItem(PRESET_KEY);
+      if (raw) setBranding({ ...EMPTY_BRANDING, ...JSON.parse(raw) });
+    } catch {
+      /* ignore */
+    }
   }, []);
 
+  const nameKey = selected?.fields.find((f) => f.required)?.key ?? selected?.fields[0]?.key;
   const requiredReady =
     selected != null && selected.fields.filter((f) => f.required).every((f) => mapping[f.key]);
   const nameMapped =
     selected != null && selected.fields.some((f) => f.required && mapping[f.key]);
 
-  // Live preview of the first row, debounced. Reflects mapping, subjects, branding.
+  // Pre-flight validation: blank required cells + duplicate name values.
+  const issues = useMemo(() => {
+    if (!selected || !upload) return { blanks: 0, dups: 0 };
+    const reqFields = selected.fields.filter((f) => f.required && mapping[f.key]);
+    let blanks = 0;
+    for (const row of upload.rows) {
+      if (reqFields.some((f) => !String(row[mapping[f.key]] ?? "").trim())) blanks++;
+    }
+    let dups = 0;
+    if (nameKey && mapping[nameKey]) {
+      const seen = new Map<string, number>();
+      for (const row of upload.rows) {
+        const k = String(row[mapping[nameKey]] ?? "").trim().toLowerCase();
+        if (k) seen.set(k, (seen.get(k) ?? 0) + 1);
+      }
+      dups = [...seen.values()].filter((n) => n > 1).reduce((a, n) => a + n, 0);
+    }
+    return { blanks, dups };
+  }, [selected, upload, mapping, nameKey]);
+
+  // Live preview of the current record, debounced.
   useEffect(() => {
     if (!selected || !upload || !nameMapped) {
       setPreviewHtml("");
       return;
     }
+    const idx = Math.min(previewIndex, upload.rows.length - 1);
     const t = setTimeout(async () => {
       try {
         const r = await fetch("/api/preview", {
@@ -92,7 +152,7 @@ export default function Home() {
             mapping,
             subjectColumns: subjectCols,
             branding: brandingPayload(branding),
-            row: upload.rows[0],
+            row: upload.rows[idx],
           }),
         });
         const { html } = await r.json();
@@ -102,7 +162,7 @@ export default function Home() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [selected, upload, mapping, subjectCols, branding, nameMapped]);
+  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex]);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -119,6 +179,7 @@ export default function Home() {
         setUpload(data);
         setMapping(selected ? autoGuess(selected, data.columns) : {});
         setSubjectCols([]);
+        setPreviewIndex(0);
       } catch {
         setUploadErr("Could not read that file.");
       }
@@ -126,32 +187,75 @@ export default function Home() {
     [selected]
   );
 
-  function handleLogo(file: File) {
-    setLogoErr("");
-    if (!/\.(png|jpe?g)$/i.test(file.name)) {
-      setLogoErr("Logo must be a PNG or JPG.");
-      return;
-    }
-    if (file.size > 600 * 1024) {
-      setLogoErr("Logo must be under 600 KB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () =>
-      setBranding((b) => ({ ...b, logoDataUrl: reader.result as string }));
-    reader.readAsDataURL(file);
-  }
-
   function chooseTemplate(t: Template) {
     setSelected(t);
     if (upload) setMapping(autoGuess(t, upload.columns));
     setSubjectCols([]);
+    setFilenamePattern("");
+    setPreviewIndex(0);
   }
 
   function toggleSubject(col: string) {
     setSubjectCols((cur) =>
       cur.includes(col) ? cur.filter((c) => c !== col) : [...cur, col]
     );
+  }
+
+  function saveBrandingPreset() {
+    try {
+      localStorage.setItem(PRESET_KEY, JSON.stringify(branding));
+      setPresetMsg("Saved as default.");
+      setTimeout(() => setPresetMsg(""), 2500);
+    } catch {
+      setPresetMsg("Could not save.");
+    }
+  }
+  function clearBrandingPreset() {
+    try {
+      localStorage.removeItem(PRESET_KEY);
+    } catch {
+      /* ignore */
+    }
+    setBranding(EMPTY_BRANDING);
+    setPresetMsg("Cleared.");
+    setTimeout(() => setPresetMsg(""), 2500);
+  }
+
+  function buildBody(rows: Record<string, string>[], startIndex: number) {
+    return {
+      templateSlug: selected!.slug,
+      mapping,
+      subjectColumns: subjectCols,
+      branding: brandingPayload(branding),
+      filenamePattern,
+      rows,
+      startIndex,
+    };
+  }
+
+  async function downloadCurrent() {
+    if (!selected || !upload) return;
+    setSingleBusy(true);
+    try {
+      const r = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildBody([upload.rows[previewIndex]], previewIndex)),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || "Failed.");
+      const { files } = (await r.json()) as { files: { name: string; data: string }[] };
+      const f = files[0];
+      const url = URL.createObjectURL(b64toBlob(f.data));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${f.name}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* surfaced via the batch flow normally; keep single-download quiet */
+    } finally {
+      setSingleBusy(false);
+    }
   }
 
   async function generate() {
@@ -170,14 +274,7 @@ export default function Home() {
         const r = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            templateSlug: selected.slug,
-            mapping,
-            subjectColumns: subjectCols,
-            branding: brandingPayload(branding),
-            rows: batch,
-            startIndex: start,
-          }),
+          body: JSON.stringify(buildBody(batch, start)),
         });
         if (!r.ok) {
           const e = await r.json();
@@ -212,9 +309,20 @@ export default function Home() {
 
   const stepClass = (n: number) =>
     "step" + (n === step ? " active" : "") + (n < step ? " done" : "");
-
-  // Columns still available to use as subjects (not already a mapped field).
   const mappedCols = new Set(Object.values(mapping).filter(Boolean));
+
+  // Group template cards by their `group` label, preserving first-seen order.
+  const grouped = useMemo(() => {
+    const m = new Map<string, Template[]>();
+    for (const t of templates) {
+      const g = t.group ?? "Templates";
+      if (!m.has(g)) m.set(g, []);
+      m.get(g)!.push(t);
+    }
+    return [...m.entries()];
+  }, [templates]);
+
+  const recordTotal = upload?.rowCount ?? 0;
 
   return (
     <div className="wrap">
@@ -241,18 +349,23 @@ export default function Home() {
         <div>
           <h2>Choose a template</h2>
           <p className="lede">Pick the document you want to make for each student.</p>
-          <div className="cards">
-            {templates.map((t) => (
-              <div
-                key={t.slug}
-                className={"tcard" + (selected?.slug === t.slug ? " sel" : "")}
-                onClick={() => chooseTemplate(t)}
-              >
-                <h3>{t.name}</h3>
-                <p>{t.description}</p>
+          {grouped.map(([g, ts]) => (
+            <div key={g} style={{ marginBottom: 18 }}>
+              <div className="group-h">{g}</div>
+              <div className="cards">
+                {ts.map((t) => (
+                  <div
+                    key={t.slug}
+                    className={"tcard" + (selected?.slug === t.slug ? " sel" : "")}
+                    onClick={() => chooseTemplate(t)}
+                  >
+                    <h3>{t.name}</h3>
+                    <p>{t.description}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
           <div className="bar">
             <span />
             <button className="btn" disabled={!selected} onClick={() => setStep(2)}>
@@ -309,9 +422,7 @@ export default function Home() {
                       </label>
                       <select
                         value={mapping[f.key] ?? ""}
-                        onChange={(e) =>
-                          setMapping((m) => ({ ...m, [f.key]: e.target.value }))
-                        }
+                        onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))}
                       >
                         <option value="">— choose column —</option>
                         {upload.columns.map((c) => (
@@ -325,6 +436,17 @@ export default function Home() {
                 </div>
               )}
 
+              {upload && (issues.blanks > 0 || issues.dups > 0) && (
+                <div className="warn">
+                  {issues.blanks > 0 && (
+                    <div>⚠ {issues.blanks} row(s) have a blank required field.</div>
+                  )}
+                  {issues.dups > 0 && (
+                    <div>⚠ {issues.dups} row(s) share a duplicate name — files will be auto-numbered.</div>
+                  )}
+                </div>
+              )}
+
               {upload && selected.subjects && (
                 <div className="section">
                   <div className="section-h">Subjects</div>
@@ -335,10 +457,7 @@ export default function Home() {
                     {upload.columns
                       .filter((c) => !mappedCols.has(c))
                       .map((c) => (
-                        <label
-                          key={c}
-                          className={"chip" + (subjectCols.includes(c) ? " on" : "")}
-                        >
+                        <label key={c} className={"chip" + (subjectCols.includes(c) ? " on" : "")}>
                           <input
                             type="checkbox"
                             checked={subjectCols.includes(c)}
@@ -353,7 +472,17 @@ export default function Home() {
 
               {upload && (
                 <div className="section">
-                  <div className="section-h">Branding (optional)</div>
+                  <div className="section-h">
+                    Branding (optional)
+                    <span className="section-act">
+                      <button className="link" onClick={saveBrandingPreset}>
+                        Save as default
+                      </button>
+                      <button className="link" onClick={clearBrandingPreset}>
+                        Clear
+                      </button>
+                    </span>
+                  </div>
                   <div className="maprow">
                     <label>School name</label>
                     <input
@@ -361,9 +490,7 @@ export default function Home() {
                       type="text"
                       placeholder="Springfield Elementary"
                       value={branding.schoolName}
-                      onChange={(e) =>
-                        setBranding((b) => ({ ...b, schoolName: e.target.value }))
-                      }
+                      onChange={(e) => setBranding((b) => ({ ...b, schoolName: e.target.value }))}
                     />
                   </div>
                   <div className="maprow">
@@ -371,18 +498,13 @@ export default function Home() {
                     <input
                       type="color"
                       value={branding.accent}
-                      onChange={(e) =>
-                        setBranding((b) => ({ ...b, accent: e.target.value }))
-                      }
+                      onChange={(e) => setBranding((b) => ({ ...b, accent: e.target.value }))}
                     />
                   </div>
                   <div className="maprow">
                     <label>Logo (PNG/JPG)</label>
                     <div style={{ flex: 1, display: "flex", gap: 8, alignItems: "center" }}>
-                      <button
-                        className="btn ghost small"
-                        onClick={() => logoInput.current?.click()}
-                      >
+                      <button className="btn ghost small" onClick={() => logoInput.current?.click()}>
                         {branding.logoDataUrl ? "Change" : "Upload"}
                       </button>
                       {branding.logoDataUrl && (
@@ -403,12 +525,58 @@ export default function Home() {
                         accept=".png,.jpg,.jpeg"
                         hidden
                         onChange={(e) => {
-                          if (e.target.files?.[0]) handleLogo(e.target.files[0]);
+                          if (e.target.files?.[0])
+                            readImage(
+                              e.target.files[0],
+                              (d) => {
+                                setLogoErr("");
+                                setBranding((b) => ({ ...b, logoDataUrl: d }));
+                              },
+                              setLogoErr
+                            );
                         }}
                       />
                     </div>
                   </div>
                   {logoErr && <div className="msg err">{logoErr}</div>}
+                  <div className="maprow">
+                    <label>Signature (PNG/JPG)</label>
+                    <div style={{ flex: 1, display: "flex", gap: 8, alignItems: "center" }}>
+                      <button className="btn ghost small" onClick={() => sigInput.current?.click()}>
+                        {branding.signatureDataUrl ? "Change" : "Upload"}
+                      </button>
+                      {branding.signatureDataUrl && (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img className="logo-prev" src={branding.signatureDataUrl} alt="signature" />
+                          <button
+                            className="btn ghost small"
+                            onClick={() => setBranding((b) => ({ ...b, signatureDataUrl: null }))}
+                          >
+                            Remove
+                          </button>
+                        </>
+                      )}
+                      <input
+                        ref={sigInput}
+                        type="file"
+                        accept=".png,.jpg,.jpeg"
+                        hidden
+                        onChange={(e) => {
+                          if (e.target.files?.[0])
+                            readImage(
+                              e.target.files[0],
+                              (d) => {
+                                setSigErr("");
+                                setBranding((b) => ({ ...b, signatureDataUrl: d }));
+                              },
+                              setSigErr
+                            );
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {sigErr && <div className="msg err">{sigErr}</div>}
                   {selected.slug === "certificate-classic" && (
                     <div className="maprow">
                       <label>Header position</label>
@@ -425,6 +593,7 @@ export default function Home() {
                       </div>
                     </div>
                   )}
+                  {presetMsg && <div className="msg ok">{presetMsg}</div>}
                 </div>
               )}
 
@@ -440,14 +609,40 @@ export default function Home() {
               )}
             </div>
 
-            <div className="preview-frame">
-              {previewHtml ? (
-                <iframe title="preview" srcDoc={previewHtml} />
-              ) : (
-                <div className="empty">
-                  Upload a file and map the name field to see a live preview of the first record.
+            <div>
+              {previewHtml && recordTotal > 1 && (
+                <div className="pvbar">
+                  <button
+                    className="pvnav"
+                    disabled={previewIndex === 0}
+                    onClick={() => setPreviewIndex((i) => Math.max(0, i - 1))}
+                  >
+                    ◀
+                  </button>
+                  <span className="pvcount">
+                    Record {previewIndex + 1} of {recordTotal}
+                  </span>
+                  <button
+                    className="pvnav"
+                    disabled={previewIndex >= recordTotal - 1}
+                    onClick={() => setPreviewIndex((i) => Math.min(recordTotal - 1, i + 1))}
+                  >
+                    ▶
+                  </button>
+                  <button className="btn ghost small" disabled={singleBusy} onClick={downloadCurrent}>
+                    {singleBusy ? "…" : "Download this one"}
+                  </button>
                 </div>
               )}
+              <div className="preview-frame">
+                {previewHtml ? (
+                  <iframe title="preview" srcDoc={previewHtml} />
+                ) : (
+                  <div className="empty">
+                    Upload a file and map the name field to see a live preview of the first record.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <div className="bar">
@@ -467,12 +662,44 @@ export default function Home() {
           <p className="lede">
             Ready to make {upload.rowCount} {selected.name.toLowerCase()} document(s).
           </p>
-          <div className="box" style={{ maxWidth: 520 }}>
+          <div className="box" style={{ maxWidth: 560 }}>
             <div className="meta">
               Template: {selected.name} · Rows: {upload.rowCount} · Source: {upload.filename}
               {selected.subjects && ` · Subjects: ${subjectCols.length}`}
               {branding.schoolName && ` · ${branding.schoolName}`}
             </div>
+
+            {(issues.blanks > 0 || issues.dups > 0) && (
+              <div className="warn">
+                {issues.blanks > 0 && <div>⚠ {issues.blanks} row(s) have a blank required field.</div>}
+                {issues.dups > 0 && <div>⚠ {issues.dups} row(s) share a duplicate name (auto-numbered).</div>}
+              </div>
+            )}
+
+            <div className="section" style={{ marginTop: 14 }}>
+              <div className="section-h">Filename</div>
+              <input
+                className="text"
+                type="text"
+                style={{ width: "100%" }}
+                placeholder={`{${nameKey ?? "name"}}`}
+                value={filenamePattern}
+                onChange={(e) => setFilenamePattern(e.target.value)}
+              />
+              <div className="hint" style={{ marginTop: 6 }}>
+                Tokens:{" "}
+                {selected.fields.map((f) => (
+                  <button
+                    key={f.key}
+                    className="token"
+                    onClick={() => setFilenamePattern((p) => p + `{${f.key}}`)}
+                  >
+                    {`{${f.key}}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="bar">
               <button className="btn ghost" onClick={() => setStep(2)} disabled={genBusy}>
                 Back
@@ -490,9 +717,7 @@ export default function Home() {
               <div className="progress">
                 <div
                   className="progress-bar"
-                  style={{
-                    width: `${Math.round((genProgress.done / genProgress.total) * 100)}%`,
-                  }}
+                  style={{ width: `${Math.round((genProgress.done / genProgress.total) * 100)}%` }}
                 />
               </div>
             )}
@@ -511,6 +736,7 @@ function brandingPayload(b: Branding) {
     accent?: string;
     logoDataUrl?: string;
     logoPos?: LogoPos;
+    signatureDataUrl?: string;
   } = {};
   if (b.schoolName.trim()) out.schoolName = b.schoolName.trim();
   if (b.accent && b.accent.toLowerCase() !== DEFAULT_ACCENT.toLowerCase()) out.accent = b.accent;
@@ -518,5 +744,6 @@ function brandingPayload(b: Branding) {
     out.logoDataUrl = b.logoDataUrl;
     out.logoPos = b.logoPos;
   }
+  if (b.signatureDataUrl) out.signatureDataUrl = b.signatureDataUrl;
   return out;
 }

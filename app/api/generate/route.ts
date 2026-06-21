@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTemplate, resolveSubjects, resolveValues } from "@/lib/templates";
+import {
+  FieldValues,
+  getTemplate,
+  resolveSubjects,
+  resolveValues,
+} from "@/lib/templates";
 import { renderPDF } from "@/lib/pdf";
+import { qrDataUrl } from "@/lib/qr";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -15,10 +21,29 @@ function safeName(s: string, fallback: string): string {
   return cleaned || fallback;
 }
 
+// Build a filename from a pattern like "{recipient_name}-{class_name}".
+// Unknown / empty tokens drop out; result is always filesystem-safe.
+function applyPattern(
+  pattern: string | undefined,
+  values: FieldValues,
+  fallback: string
+): string {
+  if (!pattern || !pattern.trim()) return fallback;
+  const filled = pattern.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? "");
+  return safeName(filled, fallback);
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { templateSlug, mapping, subjectColumns, branding, rows, startIndex } =
-      await req.json();
+    const {
+      templateSlug,
+      mapping,
+      subjectColumns,
+      branding,
+      rows,
+      startIndex,
+      filenamePattern,
+    } = await req.json();
     const template = getTemplate(templateSlug);
     if (!template) {
       return NextResponse.json({ error: "Unknown template." }, { status: 400 });
@@ -53,8 +78,13 @@ export async function POST(req: NextRequest) {
       const subjects = template.subjects
         ? resolveSubjects(subjectColumns ?? [], rows[i])
         : undefined;
-      const pdf = await renderPDF(template.slug, values, { subjects, branding });
-      const base = safeName(values[nameKey] || "", `row-${offset + i + 1}`);
+      const qr = template.qrField ? await qrDataUrl(values[template.qrField]) : undefined;
+      const pdf = await renderPDF(template.slug, values, { subjects, branding, qrDataUrl: qr });
+      const base = applyPattern(
+        filenamePattern,
+        values,
+        safeName(values[nameKey] || "", `row-${offset + i + 1}`)
+      );
       files.push({
         name: base,
         data: Buffer.from(pdf).toString("base64"),

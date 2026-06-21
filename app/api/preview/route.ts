@@ -5,6 +5,7 @@ import {
   resolveSubjects,
   resolveValues,
 } from "@/lib/templates";
+import { qrDataUrl } from "@/lib/qr";
 
 export const runtime = "nodejs";
 
@@ -19,8 +20,9 @@ export async function POST(req: NextRequest) {
     const subjects = template.subjects
       ? resolveSubjects(subjectColumns ?? [], row ?? {})
       : undefined;
+    const qr = template.qrField ? await qrDataUrl(values[template.qrField]) : undefined;
     return NextResponse.json({
-      html: renderHTML(template.slug, values, { subjects, branding }),
+      html: renderHTML(template.slug, values, { subjects, branding, qrDataUrl: qr }),
     });
   } catch {
     return NextResponse.json({ error: "Could not build preview." }, { status: 400 });

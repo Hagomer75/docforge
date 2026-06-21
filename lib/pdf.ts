@@ -87,6 +87,91 @@ async function embedLogo(
   }
 }
 
+// Embed any data-URL image (signature, QR) scaled to fit.
+async function embedDataUrl(
+  doc: PDFDocument,
+  url: string | undefined,
+  maxH: number,
+  maxW: number
+): Promise<{ image: PDFImage; w: number; h: number } | null> {
+  if (!url) return null;
+  const m = /^data:image\/(png|jpe?g);base64,(.+)$/i.exec(url);
+  if (!m) return null;
+  try {
+    const bytes = Buffer.from(m[2], "base64");
+    const image =
+      m[1].toLowerCase() === "png" ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+    const { width: w, height: h } = image;
+    const scale = Math.min(maxH / h, maxW / w, 1);
+    return { image, w: w * scale, h: h * scale };
+  } catch {
+    return null;
+  }
+}
+
+// Shared header band for A4 documents: logo + title + school, with a divider.
+// Returns the y just below the divider.
+async function drawDocHeader(
+  doc: PDFDocument,
+  page: PDFPage,
+  title: string,
+  opts: RenderOpts,
+  edu: RGB,
+  metaLines: string[]
+): Promise<number> {
+  const { width, height } = page.getSize();
+  const serifB = await doc.embedFont(StandardFonts.TimesRomanBold);
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const M = 48;
+  const right = width - M;
+  let y = height - 70;
+
+  const logo = await embedDataUrl(doc, opts.branding?.logoDataUrl, 40, 120);
+  let titleX = M;
+  if (logo) {
+    page.drawImage(logo.image, { x: M, y: y - 6, width: logo.w, height: logo.h });
+    titleX = M + logo.w + 12;
+  }
+  page.drawText(title, { x: titleX, y, size: 22, font: serifB, color: edu });
+  const school = opts.branding?.schoolName?.trim();
+  if (school) page.drawText(school, { x: titleX, y: y - 15, size: 11, font: sans, color: C.muted });
+
+  metaLines.filter(Boolean).forEach((line, i) => {
+    const w = sans.widthOfTextAtSize(line, 11);
+    page.drawText(line, { x: right - w, y: y + 4 - i * 14, size: 11, font: sans, color: C.muted });
+  });
+
+  y -= 22;
+  page.drawLine({ start: { x: M, y }, end: { x: right, y }, color: edu, thickness: 2 });
+  return y - 6;
+}
+
+// Signature + stamp row near the bottom of a document.
+async function drawSignatureRow(
+  doc: PDFDocument,
+  page: PDFPage,
+  opts: RenderOpts,
+  edu: RGB,
+  label: string,
+  value: string
+): Promise<void> {
+  const { width } = page.getSize();
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const M = 48;
+  const right = width - M;
+  const sy = 96;
+
+  const sig = await embedDataUrl(doc, opts.branding?.signatureDataUrl, 34, 150);
+  if (sig) page.drawImage(sig.image, { x: M, y: sy + 4, width: sig.w, height: sig.h });
+  page.drawLine({ start: { x: M, y: sy }, end: { x: M + 170, y: sy }, color: C.line, thickness: 1 });
+  if (value) page.drawText(value, { x: M, y: sy - 14, size: 12, font: sansB, color: C.ink });
+  if (label) page.drawText(label, { x: M, y: sy - 28, size: 10, font: sans, color: C.muted });
+
+  page.drawLine({ start: { x: right - 170, y: sy }, end: { x: right, y: sy }, color: edu, thickness: 1 });
+  page.drawText("Official stamp", { x: right - 170, y: sy - 14, size: 10, font: sans, color: C.muted });
+}
+
 async function certificatePDF(
   doc: PDFDocument,
   v: FieldValues,
@@ -240,11 +325,218 @@ async function progressReportPDF(
 
   // Signature
   const sy = 80;
+  const sig = await embedDataUrl(doc, opts.branding?.signatureDataUrl, 30, 150);
+  if (sig) page.drawImage(sig.image, { x: M, y: sy + 4, width: sig.w, height: sig.h });
   page.drawLine({ start: { x: M, y: sy }, end: { x: M + 180, y: sy }, color: C.line, thickness: 1 });
   if (v.teacher) page.drawText(v.teacher, { x: M, y: sy + 6, size: 12, font: sansB, color: C.ink });
   page.drawText("Teacher", { x: M, y: sy - 14, size: 10, font: sans, color: C.muted });
   page.drawLine({ start: { x: right - 180, y: sy }, end: { x: right, y: sy }, color: C.line, thickness: 1 });
   page.drawText("Signature", { x: right - 180, y: sy - 14, size: 10, font: sans, color: C.muted });
+}
+
+/* ---------- fee receipt ---------- */
+
+async function feeReceiptPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const page = doc.addPage([595.28, 841.89]);
+  const { width } = page.getSize();
+  const edu = accentColor(opts.branding);
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const M = 48;
+  const right = width - M;
+
+  let y = await drawDocHeader(doc, page, "Fee Receipt", opts, edu, [
+    `Receipt: ${v.receipt_no || "—"}`,
+    v.date || "",
+  ]);
+
+  // received from / method
+  y -= 34;
+  page.drawText("RECEIVED FROM", { x: M, y: y + 16, size: 9, font: sans, color: C.muted });
+  page.drawText(v.student_name || "Student name", { x: M, y, size: 15, font: sansB, color: C.ink });
+  page.drawText("METHOD", { x: width / 2, y: y + 16, size: 9, font: sans, color: C.muted });
+  page.drawText(v.payment_method || "—", { x: width / 2, y, size: 15, font: sansB, color: C.ink });
+
+  // line item table
+  y -= 36;
+  page.drawRectangle({ x: M, y: y - 6, width: right - M, height: 24, color: C.paper });
+  page.drawText("DESCRIPTION", { x: M + 12, y, size: 10, font: sans, color: C.muted });
+  page.drawText("AMOUNT", { x: right - 90, y, size: 10, font: sans, color: C.muted });
+  y -= 8;
+  page.drawLine({ start: { x: M, y }, end: { x: right, y }, color: C.line, thickness: 1 });
+  y -= 30;
+  page.drawText(v.fee_type || "Tuition fee", { x: M + 12, y: y + 9, size: 13, font: sans, color: C.ink });
+  const amt = v.amount || "—";
+  const aw = sansB.widthOfTextAtSize(amt, 13);
+  page.drawText(amt, { x: right - 12 - aw, y: y + 9, size: 13, font: sansB, color: C.ink });
+  page.drawLine({ start: { x: M, y }, end: { x: right, y }, color: C.line, thickness: 1 });
+
+  // totals
+  const tx = right - 230;
+  const totalRow = (yy: number, label: string, val: string, big = false) => {
+    page.drawText(label, { x: tx, y: yy, size: big ? 13 : 11, font: big ? sansB : sans, color: big ? edu : C.muted });
+    const f = big ? sansB : sans;
+    const w = f.widthOfTextAtSize(val, big ? 15 : 12);
+    page.drawText(val, { x: right - w, y: yy, size: big ? 15 : 12, font: big ? sansB : sans, color: big ? edu : C.ink });
+  };
+  y -= 26;
+  totalRow(y, "Total", v.amount || "—");
+  y -= 18;
+  totalRow(y, "Paid", v.amount_paid || v.amount || "—");
+  y -= 8;
+  page.drawLine({ start: { x: tx, y }, end: { x: right, y }, color: edu, thickness: 1.5 });
+  y -= 20;
+  totalRow(y, "Balance", v.balance || "0", true);
+
+  // PAID pill
+  y -= 30;
+  page.drawRectangle({ x: M, y: y - 4, width: 58, height: 20, color: edu });
+  page.drawText("PAID", { x: M + 14, y: y + 1, size: 11, font: sansB, color: rgb(1, 1, 1) });
+
+  await drawSignatureRow(doc, page, opts, edu, "Received by", v.received_by);
+}
+
+/* ---------- student ID card ---------- */
+
+async function idCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const W = 360, H = 227;
+  const page = doc.addPage([W, H]);
+  const edu = accentColor(opts.branding);
+  const serifB = await doc.embedFont(StandardFonts.TimesRomanBold);
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const white = rgb(1, 1, 1);
+
+  // top colour bar
+  const barH = 40;
+  page.drawRectangle({ x: 0, y: H - barH, width: W, height: barH, color: edu });
+  page.drawText(opts.branding?.schoolName?.trim() || "School name", {
+    x: 16, y: H - 26, size: 13, font: serifB, color: white,
+  });
+  const tag = "STUDENT ID";
+  const tw = sans.widthOfTextAtSize(tag, 8);
+  page.drawText(tag, { x: W - 16 - tw, y: H - 24, size: 8, font: sans, color: white });
+
+  // name + details (left)
+  let y = H - barH - 34;
+  page.drawText(v.full_name || "Full name", { x: 16, y, size: 18, font: serifB, color: C.ink });
+  y -= 16;
+  page.drawText("STUDENT", { x: 16, y, size: 8, font: sans, color: C.muted });
+  y -= 26;
+  page.drawText("CLASS", { x: 16, y: y + 12, size: 8, font: sans, color: C.muted });
+  page.drawText(v.class_name || "—", { x: 16, y, size: 13, font: sansB, color: C.ink });
+  y -= 30;
+  page.drawText("VALID UNTIL", { x: 16, y: y + 12, size: 8, font: sans, color: C.muted });
+  page.drawText(v.valid_until || "—", { x: 16, y, size: 13, font: sansB, color: C.ink });
+
+  // QR (right)
+  const qr = await embedDataUrl(doc, opts.qrDataUrl, 86, 86);
+  if (qr) {
+    page.drawImage(qr.image, { x: W - 16 - qr.w, y: 40, width: qr.w, height: qr.h });
+  } else {
+    page.drawRectangle({ x: W - 102, y: 40, width: 86, height: 86, borderColor: C.line, borderWidth: 1 });
+  }
+  const id = v.student_id || "ID-000";
+  const idw = sansB.widthOfTextAtSize(id, 11);
+  page.drawText(id, { x: W - 59 - idw / 2, y: 24, size: 11, font: sansB, color: edu });
+}
+
+/* ---------- letters ---------- */
+
+async function letterPDF(
+  doc: PDFDocument,
+  opts: RenderOpts,
+  title: string,
+  greeting: string,
+  paragraphs: string[],
+  facts: { k: string; v: string }[],
+  signLabel: string,
+  signValue: string,
+  v: FieldValues
+): Promise<void> {
+  const page = doc.addPage([595.28, 841.89]);
+  const { width } = page.getSize();
+  const edu = accentColor(opts.branding);
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const M = 48;
+  const right = width - M;
+  const textW = right - M;
+
+  let y = await drawDocHeader(doc, page, title, opts, edu, [v.date || ""]);
+  y -= 30;
+  page.drawText(greeting, { x: M, y, size: 13, font: sansB, color: C.ink });
+  y -= 24;
+
+  const drawPara = (text: string) => {
+    for (const ln of wrap(sans, 12, textW, text)) {
+      page.drawText(ln, { x: M, y, size: 12, font: sans, color: C.ink });
+      y -= 18;
+    }
+    y -= 8;
+  };
+  if (paragraphs[0]) drawPara(paragraphs[0]);
+
+  // facts box
+  if (facts.length) {
+    const cols = 3;
+    const colW = textW / cols;
+    const rows = Math.ceil(facts.length / cols);
+    const boxH = 18 + rows * 34;
+    page.drawRectangle({
+      x: M, y: y - boxH + 10, width: textW, height: boxH,
+      color: C.paper, borderColor: C.line, borderWidth: 1,
+    });
+    facts.forEach((f, i) => {
+      const cx = M + 14 + (i % cols) * colW;
+      const cy = y - 6 - Math.floor(i / cols) * 34;
+      page.drawText(f.k.toUpperCase(), { x: cx, y: cy, size: 8, font: sans, color: C.muted });
+      page.drawText(f.v || "—", { x: cx, y: cy - 15, size: 13, font: sansB, color: C.ink });
+    });
+    y -= boxH + 6;
+  }
+
+  paragraphs.slice(1).forEach(drawPara);
+
+  await drawSignatureRow(doc, page, opts, edu, signLabel, signValue);
+}
+
+async function attendanceLetterPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const greeting = v.guardian ? `Dear ${v.guardian},` : "Dear Parent / Guardian,";
+  const msg =
+    v.message ||
+    `This letter is to formally notify you regarding the school attendance of your child, ${v.student_name || "the student"}. We request your support in ensuring regular attendance going forward.`;
+  await letterPDF(
+    doc, opts, "Attendance Notice", greeting,
+    [msg, "Please contact the school office if you have any questions or wish to discuss the matter further."],
+    [
+      { k: "Student", v: v.student_name },
+      { k: "Class", v: v.class_name },
+      { k: "Attendance", v: v.attendance_pct },
+      { k: "Days absent", v: v.days_absent },
+      { k: "Period", v: v.period },
+    ],
+    v.signatory ? "" : "School administration", v.signatory, v
+  );
+}
+
+async function enrollmentLetterPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const status = v.status || "confirmed";
+  await letterPDF(
+    doc, opts, "Enrollment Confirmation", "To whom it may concern,",
+    [
+      `This is to certify that ${v.student_name || "the student"} is ${status} for enrollment at our institution for the academic year ${v.academic_year || "—"}.`,
+      "This confirmation is issued upon request and may be used for official purposes.",
+    ],
+    [
+      { k: "Student", v: v.student_name },
+      { k: "Class / grade", v: v.class_name },
+      { k: "Academic year", v: v.academic_year },
+      { k: "Admission no.", v: v.admission_no },
+      { k: "Status", v: status },
+    ],
+    "Authorised signatory", v.signatory, v
+  );
 }
 
 export async function renderPDF(
@@ -253,10 +545,24 @@ export async function renderPDF(
   opts: RenderOpts = {}
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  if (slug === "progress-report") {
-    await progressReportPDF(doc, v, opts);
-  } else {
-    await certificatePDF(doc, v, opts);
+  switch (slug) {
+    case "progress-report":
+      await progressReportPDF(doc, v, opts);
+      break;
+    case "fee-receipt":
+      await feeReceiptPDF(doc, v, opts);
+      break;
+    case "student-id-card":
+      await idCardPDF(doc, v, opts);
+      break;
+    case "attendance-letter":
+      await attendanceLetterPDF(doc, v, opts);
+      break;
+    case "enrollment-confirmation":
+      await enrollmentLetterPDF(doc, v, opts);
+      break;
+    default:
+      await certificatePDF(doc, v, opts);
   }
   return doc.save();
 }
