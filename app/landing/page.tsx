@@ -129,18 +129,18 @@ export default function Landing() {
               <div className={s.csvRow} /><div className={s.csvRow} />
             </div>
             <div className={s.arrow}>{IC.arrow}</div>
-            <div className={s.docStack}>
-              <div className={`${s.doc} ${s.doc1}`} />
-              <div className={`${s.doc} ${s.doc2}`} />
-              <div className={`${s.doc} ${s.doc3}`}>
-                <div className={s.certTop} />
-                <div className={s.certBody}>
-                  <div className={s.certKick}>CERTIFICATE</div>
-                  <div className={s.certTitle}>For Excellence</div>
-                  <div className={s.certName}>Maya Thompson</div>
-                  <div className={s.certQr} />
-                </div>
-              </div>
+            <div className={s.rotator}>
+              {SHOTS.map((sh, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={i}
+                  className={s.rotImg}
+                  src={`/samples/${sh.img}.png`}
+                  alt=""
+                  style={{ animationDelay: `${i * 2.2}s` }}
+                  loading="eager"
+                />
+              ))}
             </div>
           </div>
         </div>
@@ -154,31 +154,6 @@ export default function Landing() {
             <div className={`${s.stat} ${s.reveal}`}><span className={s.statNum}>2</span><span className={s.statLbl}>languages · EN + AR</span></div>
             <div className={`${s.stat} ${s.reveal}`}><span className={s.statNum}>100s</span><span className={s.statLbl}>students per run</span></div>
             <div className={`${s.stat} ${s.reveal}`}><span className={s.statNum}>0</span><span className={s.statLbl}>logins or installs</span></div>
-          </div>
-        </div>
-      </section>
-
-      {/* showcase */}
-      <section className={s.section}>
-        <div className={s.wrap}>
-          <div className={`${s.center} ${s.reveal}`}>
-            <span className={s.kicker}>Examples</span>
-            <h2 className={s.h2}>Real documents, made in seconds</h2>
-            <p className={s.lead}>Every one below came straight out of DocForge — branded, print-ready, in English or Arabic.</p>
-          </div>
-          <div className={s.shots}>
-            {SHOTS.map((sh, i) => (
-              <div className={`${s.shot} ${s.reveal}`} key={i}>
-                <div className={s.shotImg}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/samples/${sh.img}.png`} alt={`${sh.t} made with DocForge`} loading="lazy" />
-                </div>
-                <div className={s.shotCap}>
-                  <b>{sh.t}</b>
-                  <span className={s.shotTag}>{sh.tag}</span>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </section>

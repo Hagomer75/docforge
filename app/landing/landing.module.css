@@ -115,12 +115,32 @@
 .certQr { width: 38px; height: 38px; margin: 12px auto 0; border-radius: 5px;
   background:
     conic-gradient(from 0deg, var(--ink) 25%, #fff 0 50%, var(--ink) 0 75%, #fff 0) 0 0/12px 12px; }
+/* rotating real-document showcase inside the hero */
+.rotator { position: relative; width: 258px; height: 312px; flex-shrink: 0; }
+.rotImg {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+  background: #fff; border: 1px solid var(--line); border-radius: 9px;
+  box-shadow: 0 26px 50px -30px rgba(28, 42, 57, .52);
+  opacity: 0; animation: swap 13.2s ease-in-out infinite;
+}
+@keyframes swap {
+  0% { opacity: 0; transform: rotate(-4deg) scale(.95); }
+  3% { opacity: 1; transform: rotate(0) scale(1); }
+  14% { opacity: 1; transform: rotate(0) scale(1); }
+  18% { opacity: 0; transform: rotate(4deg) scale(.95); }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rotImg { animation: none !important; opacity: 0; }
+  .rotImg:first-child { opacity: 1; }
+}
+
 @media (max-width: 860px) {
   .hero { grid-template-columns: 1fr; gap: 30px; padding: 48px 0; }
   .h1 { max-width: none; }
   .visual { flex-wrap: wrap; padding: 22px; gap: 14px; min-height: 0; }
   .csvCard { width: 150px; }
-  .docStack { width: 150px; height: 188px; }
+  .rotator { width: 210px; height: 256px; }
   .arrow svg { width: 24px; height: 24px; }
 }
 
