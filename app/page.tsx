@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useI18n, LangToggle } from "./i18n";
+import { FIELD_I18N, GROUP_I18N, TEMPLATE_I18N } from "@/lib/i18n";
 
 type Field = { key: string; label: string; required: boolean };
 type Template = {
@@ -62,10 +64,11 @@ function b64toBlob(b64: string, type = "application/pdf"): Blob {
 function readImage(
   file: File,
   onOk: (dataUrl: string) => void,
-  onErr: (msg: string) => void
+  onErr: (msg: string) => void,
+  msgs: { type: string; size: string }
 ) {
-  if (!/\.(png|jpe?g)$/i.test(file.name)) return onErr("Must be a PNG or JPG.");
-  if (file.size > 600 * 1024) return onErr("Must be under 600 KB.");
+  if (!/\.(png|jpe?g)$/i.test(file.name)) return onErr(msgs.type);
+  if (file.size > 600 * 1024) return onErr(msgs.size);
   const reader = new FileReader();
   reader.onload = () => onOk(reader.result as string);
   reader.readAsDataURL(file);
@@ -170,6 +173,14 @@ export default function Home() {
   const fileInput = useRef<HTMLInputElement>(null);
   const logoInput = useRef<HTMLInputElement>(null);
   const sigInput = useRef<HTMLInputElement>(null);
+  const { t, lang } = useI18n();
+
+  // Localised labels for server-driven template/field data.
+  const tn = (tp: Template) => (lang === "ar" ? TEMPLATE_I18N[tp.slug]?.ar.name ?? tp.name : tp.name);
+  const td = (tp: Template) =>
+    lang === "ar" ? TEMPLATE_I18N[tp.slug]?.ar.description ?? tp.description : tp.description;
+  const tg = (g: string) => (lang === "ar" ? GROUP_I18N[g] ?? g : g);
+  const tf = (f: Field) => (lang === "ar" ? FIELD_I18N[f.key] ?? f.label : f.label);
 
   useEffect(() => {
     fetch("/api/templates")
@@ -249,7 +260,7 @@ export default function Home() {
         const r = await fetch("/api/upload", { method: "POST", body: fd });
         const data = await r.json();
         if (!r.ok) {
-          setUploadErr(data.error || "Upload failed.");
+          setUploadErr(data.error || t("uploadFailed"));
           return;
         }
         setUpload(data);
@@ -257,7 +268,7 @@ export default function Home() {
         setSubjectCols([]);
         setPreviewIndex(0);
       } catch {
-        setUploadErr("Could not read that file.");
+        setUploadErr(t("cantRead"));
       }
     },
     [selected]
@@ -292,10 +303,10 @@ export default function Home() {
   function saveBrandingPreset() {
     try {
       localStorage.setItem(PRESET_KEY, JSON.stringify(branding));
-      setPresetMsg("Saved as default.");
+      setPresetMsg(t("savedDefault"));
       setTimeout(() => setPresetMsg(""), 2500);
     } catch {
-      setPresetMsg("Could not save.");
+      setPresetMsg(t("couldNotSave"));
     }
   }
   function clearBrandingPreset() {
@@ -305,7 +316,7 @@ export default function Home() {
       /* ignore */
     }
     setBranding(EMPTY_BRANDING);
-    setPresetMsg("Cleared.");
+    setPresetMsg(t("cleared"));
     setTimeout(() => setPresetMsg(""), 2500);
   }
 
@@ -386,9 +397,9 @@ export default function Home() {
       a.download = `docforge-${selected.slug}.zip`;
       a.click();
       URL.revokeObjectURL(url);
-      setGenMsg({ text: `Done. ${upload.rowCount} PDFs downloaded as a ZIP.`, ok: true });
+      setGenMsg({ text: t("doneMsg", { n: upload.rowCount }), ok: true });
     } catch (err) {
-      setGenMsg({ text: err instanceof Error ? err.message : "Generation failed.", ok: false });
+      setGenMsg({ text: err instanceof Error ? err.message : t("genFailed"), ok: false });
     } finally {
       setGenBusy(false);
       setGenProgress(null);
@@ -412,10 +423,13 @@ export default function Home() {
         <div className="logo">
           Doc<span>Forge</span>
         </div>
-        <span className="tag">Batch documents</span>
-        <a className="help-link" href="/help">
-          Help &amp; how-to
-        </a>
+        <span className="tag">{t("tagline")}</span>
+        <div className="hdr-actions">
+          <LangToggle />
+          <a className="help-link" href="/help">
+            {t("help")}
+          </a>
+        </div>
       </header>
 
       <div className="acc">
@@ -423,26 +437,26 @@ export default function Home() {
         <div className={"panel" + (open === 1 ? " open" : "")}>
           <button className="phead" onClick={() => setOpen(1)}>
             <span className={"pnum" + (selected ? " done" : "")}>1</span>
-            <span className="ptitle">Choose template</span>
-            {selected && open !== 1 && <span className="psum">{selected.name}</span>}
+            <span className="ptitle">{t("s1")}</span>
+            {selected && open !== 1 && <span className="psum">{tn(selected)}</span>}
           </button>
           {open === 1 && (
             <div className="pbody">
               <p className="lede" style={{ marginTop: 0 }}>
-                Pick the document you want to make for each student.
+                {t("pickLede")}
               </p>
               <div className="cards cards-grid">
-                {templates.map((t) => (
+                {templates.map((tp) => (
                   <div
-                    key={t.slug}
-                    className={"tcard" + (selected?.slug === t.slug ? " sel" : "")}
-                    onClick={() => chooseTemplate(t)}
+                    key={tp.slug}
+                    className={"tcard" + (selected?.slug === tp.slug ? " sel" : "")}
+                    onClick={() => chooseTemplate(tp)}
                   >
-                    <div className="tcard-ic">{TEMPLATE_ICONS[t.slug] ?? DEFAULT_ICON}</div>
+                    <div className="tcard-ic">{TEMPLATE_ICONS[tp.slug] ?? DEFAULT_ICON}</div>
                     <div className="tcard-tx">
-                      {t.group && <span className="tcard-grp">{t.group}</span>}
-                      <h3>{t.name}</h3>
-                      <p>{t.description}</p>
+                      {tp.group && <span className="tcard-grp">{tg(tp.group)}</span>}
+                      <h3>{tn(tp)}</h3>
+                      <p>{td(tp)}</p>
                     </div>
                   </div>
                 ))}
@@ -455,10 +469,10 @@ export default function Home() {
         <div className={"panel" + (open === 2 ? " open" : "") + (!selected ? " disabled" : "")}>
           <button className="phead" onClick={() => go(2)} disabled={!selected}>
             <span className={"pnum" + (requiredReady ? " done" : "")}>2</span>
-            <span className="ptitle">Upload &amp; map</span>
+            <span className="ptitle">{t("s2")}</span>
             {upload && open !== 2 && (
               <span className="psum">
-                {upload.filename} · {upload.rowCount} rows
+                {upload.filename} · {upload.rowCount} {t("rowsDetected")}
               </span>
             )}
           </button>
@@ -481,8 +495,8 @@ export default function Home() {
                 }}
               >
                 {upload
-                  ? `${upload.filename} — ${upload.rowCount} rows detected`
-                  : "Drop a CSV/Excel file here, or click to choose"}
+                  ? `${upload.filename} — ${upload.rowCount} ${t("rowsDetected")}`
+                  : t("dropHint")}
                 <input
                   ref={fileInput}
                   type="file"
@@ -499,14 +513,14 @@ export default function Home() {
                   {selected.fields.map((f) => (
                     <div className="maprow" key={f.key}>
                       <label>
-                        {f.label}
+                        {tf(f)}
                         {f.required && <span className="req">*</span>}
                       </label>
                       <select
                         value={mapping[f.key] ?? ""}
                         onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))}
                       >
-                        <option value="">— choose column —</option>
+                        <option value="">{t("chooseColumn")}</option>
                         {upload.columns.map((c) => (
                           <option key={c} value={c}>
                             {c}
@@ -521,19 +535,19 @@ export default function Home() {
               {upload && (issues.blanks > 0 || issues.dups > 0) && (
                 <div className="warn">
                   {issues.blanks > 0 && (
-                    <div>⚠ {issues.blanks} row(s) have a blank required field.</div>
+                    <div>⚠ {issues.blanks} {t("warnBlank")}</div>
                   )}
                   {issues.dups > 0 && (
-                    <div>⚠ {issues.dups} row(s) share a duplicate name — files will be auto-numbered.</div>
+                    <div>⚠ {issues.dups} {t("warnDup")}</div>
                   )}
                 </div>
               )}
 
               {upload && selected.subjects && (
                 <div className="section">
-                  <div className="section-h">Subjects</div>
+                  <div className="section-h">{t("subjects")}</div>
                   <p className="hint" style={{ marginTop: 0 }}>
-                    Tick the columns that hold marks. Each becomes a row on the report.
+                    {t("subjectsHint")}
                   </p>
                   <div className="chips">
                     {upload.columns
@@ -555,18 +569,18 @@ export default function Home() {
               {upload && (
                 <div className="section">
                   <div className="section-h">
-                    Branding (optional)
+                    {t("branding")}
                     <span className="section-act">
                       <button className="link" onClick={saveBrandingPreset}>
-                        Save as default
+                        {t("saveDefault")}
                       </button>
                       <button className="link" onClick={clearBrandingPreset}>
-                        Clear
+                        {t("clear")}
                       </button>
                     </span>
                   </div>
                   <div className="maprow">
-                    <label>School name</label>
+                    <label>{t("schoolName")}</label>
                     <input
                       className="text"
                       type="text"
@@ -576,7 +590,7 @@ export default function Home() {
                     />
                   </div>
                   <div className="maprow">
-                    <label>Accent colour</label>
+                    <label>{t("accent")}</label>
                     <input
                       type="color"
                       value={branding.accent}
@@ -584,10 +598,10 @@ export default function Home() {
                     />
                   </div>
                   <div className="maprow">
-                    <label>Logo (PNG/JPG)</label>
+                    <label>{t("logo")}</label>
                     <div style={{ flex: 1, display: "flex", gap: 8, alignItems: "center" }}>
                       <button className="btn ghost small" onClick={() => logoInput.current?.click()}>
-                        {branding.logoDataUrl ? "Change" : "Upload"}
+                        {branding.logoDataUrl ? t("change") : t("upload")}
                       </button>
                       {branding.logoDataUrl && (
                         <>
@@ -597,7 +611,7 @@ export default function Home() {
                             className="btn ghost small"
                             onClick={() => setBranding((b) => ({ ...b, logoDataUrl: null }))}
                           >
-                            Remove
+                            {t("remove")}
                           </button>
                         </>
                       )}
@@ -614,7 +628,8 @@ export default function Home() {
                                 setLogoErr("");
                                 setBranding((b) => ({ ...b, logoDataUrl: d }));
                               },
-                              setLogoErr
+                              setLogoErr,
+                              { type: t("imgErr"), size: t("imgBig") }
                             );
                         }}
                       />
@@ -622,10 +637,10 @@ export default function Home() {
                   </div>
                   {logoErr && <div className="msg err">{logoErr}</div>}
                   <div className="maprow">
-                    <label>Signature (PNG/JPG)</label>
+                    <label>{t("signature")}</label>
                     <div style={{ flex: 1, display: "flex", gap: 8, alignItems: "center" }}>
                       <button className="btn ghost small" onClick={() => sigInput.current?.click()}>
-                        {branding.signatureDataUrl ? "Change" : "Upload"}
+                        {branding.signatureDataUrl ? t("change") : t("upload")}
                       </button>
                       {branding.signatureDataUrl && (
                         <>
@@ -635,7 +650,7 @@ export default function Home() {
                             className="btn ghost small"
                             onClick={() => setBranding((b) => ({ ...b, signatureDataUrl: null }))}
                           >
-                            Remove
+                            {t("remove")}
                           </button>
                         </>
                       )}
@@ -652,7 +667,8 @@ export default function Home() {
                                 setSigErr("");
                                 setBranding((b) => ({ ...b, signatureDataUrl: d }));
                               },
-                              setSigErr
+                              setSigErr,
+                              { type: t("imgErr"), size: t("imgBig") }
                             );
                         }}
                       />
@@ -661,7 +677,7 @@ export default function Home() {
                   {sigErr && <div className="msg err">{sigErr}</div>}
                   {selected.slug === "certificate-classic" && (
                     <div className="maprow">
-                      <label>Header position</label>
+                      <label>{t("headerPos")}</label>
                       <div className="seg" style={{ flex: 1 }}>
                         {(["left", "center", "right"] as LogoPos[]).map((p) => (
                           <button
@@ -669,7 +685,7 @@ export default function Home() {
                             className={"seg-btn" + (branding.logoPos === p ? " on" : "")}
                             onClick={() => setBranding((b) => ({ ...b, logoPos: p }))}
                           >
-                            {p[0].toUpperCase() + p.slice(1)}
+                            {p === "left" ? t("posLeft") : p === "center" ? t("posCenter") : t("posRight")}
                           </button>
                         ))}
                       </div>
@@ -682,9 +698,9 @@ export default function Home() {
               {uploadErr && <div className="msg err">{uploadErr}</div>}
               {!upload && (
                 <div className="hint">
-                  No file handy? Grab the{" "}
+                  {t("noFile")}{" "}
                   <a href="/sample-class.csv" download>
-                    sample class list
+                    {t("sampleList")}
                   </a>
                   .
                 </div>
@@ -704,7 +720,7 @@ export default function Home() {
                         ◀
                       </button>
                       <span className="pvcount">
-                        Record {previewIndex + 1} of {recordTotal}
+                        {t("recordOf", { i: previewIndex + 1, n: recordTotal })}
                       </span>
                       <button
                         className="pvnav"
@@ -720,10 +736,10 @@ export default function Home() {
                       className={"btn ghost small" + (editing ? " on" : "")}
                       onClick={() => setEditing((e) => !e)}
                     >
-                      {editing ? "Done editing" : "Edit fields"}
+                      {editing ? t("doneEditing") : t("editFields")}
                     </button>
                     <button className="btn ghost small" disabled={singleBusy} onClick={downloadCurrent}>
-                      {singleBusy ? "…" : "Download this one"}
+                      {singleBusy ? "…" : t("downloadOne")}
                     </button>
                   </div>
                 </div>
@@ -732,19 +748,17 @@ export default function Home() {
                 {previewHtml ? (
                   <iframe title="preview" srcDoc={previewHtml} />
                 ) : (
-                  <div className="empty">
-                    Upload a file and map the name field to see a live preview of the first record.
-                  </div>
+                  <div className="empty">{t("previewEmpty")}</div>
                 )}
               </div>
               {editing && previewHtml && upload && (
                 <div className="editbox">
-                  <div className="section-h">Edit this record</div>
+                  <div className="section-h">{t("editRecord")}</div>
                   {selected.fields
                     .filter((f) => mapping[f.key])
                     .map((f) => (
                       <div className="maprow" key={f.key}>
-                        <label>{f.label}</label>
+                        <label>{tf(f)}</label>
                         <input
                           className="text"
                           type="text"
@@ -754,7 +768,7 @@ export default function Home() {
                       </div>
                     ))}
                   <p className="hint" style={{ marginTop: 8 }}>
-                    Edits apply to this record only and are included when you generate.
+                    {t("editNote")}
                   </p>
                 </div>
               )}
@@ -762,10 +776,10 @@ export default function Home() {
           </div>
               <div className="bar">
                 <button className="btn ghost" onClick={() => setOpen(1)}>
-                  Back
+                  {t("back")}
                 </button>
                 <button className="btn" disabled={!requiredReady} onClick={() => go(3)}>
-                  Continue
+                  {t("cont")}
                 </button>
               </div>
             </div>
@@ -776,29 +790,29 @@ export default function Home() {
         <div className={"panel" + (open === 3 ? " open" : "") + (!requiredReady ? " disabled" : "")}>
           <button className="phead" onClick={() => go(3)} disabled={!requiredReady}>
             <span className="pnum">3</span>
-            <span className="ptitle">Generate</span>
+            <span className="ptitle">{t("s3")}</span>
           </button>
           {open === 3 && selected && upload && (
             <div className="pbody">
               <p className="lede" style={{ marginTop: 0 }}>
-                Ready to make {upload.rowCount} {selected.name.toLowerCase()} document(s).
+                {t("readyTo", { n: upload.rowCount, name: tn(selected) })}
               </p>
               <div className="box" style={{ maxWidth: 560 }}>
             <div className="meta">
-              Template: {selected.name} · Rows: {upload.rowCount} · Source: {upload.filename}
-              {selected.subjects && ` · Subjects: ${subjectCols.length}`}
+              {t("template")}: {tn(selected)} · {t("rows")}: {upload.rowCount} · {t("source")}: {upload.filename}
+              {selected.subjects && ` · ${t("subjects")}: ${subjectCols.length}`}
               {branding.schoolName && ` · ${branding.schoolName}`}
             </div>
 
             {(issues.blanks > 0 || issues.dups > 0) && (
               <div className="warn">
-                {issues.blanks > 0 && <div>⚠ {issues.blanks} row(s) have a blank required field.</div>}
-                {issues.dups > 0 && <div>⚠ {issues.dups} row(s) share a duplicate name (auto-numbered).</div>}
+                {issues.blanks > 0 && <div>⚠ {issues.blanks} {t("warnBlank")}</div>}
+                {issues.dups > 0 && <div>⚠ {issues.dups} {t("warnDup")}</div>}
               </div>
             )}
 
             <div className="section" style={{ marginTop: 14 }}>
-              <div className="section-h">Filename</div>
+              <div className="section-h">{t("filename")}</div>
               <input
                 className="text"
                 type="text"
@@ -808,7 +822,7 @@ export default function Home() {
                 onChange={(e) => setFilenamePattern(e.target.value)}
               />
               <div className="hint" style={{ marginTop: 6 }}>
-                Tokens:{" "}
+                {t("tokens")}{" "}
                 {selected.fields.map((f) => (
                   <button
                     key={f.key}
@@ -823,15 +837,15 @@ export default function Home() {
 
             <div className="bar">
               <button className="btn ghost" onClick={() => setOpen(2)} disabled={genBusy}>
-                Back
+                {t("back")}
               </button>
               <button className="btn" disabled={genBusy} onClick={generate}>
                 {genBusy && <span className="spin" />}
                 {genBusy
                   ? genProgress
-                    ? `Generating ${genProgress.done}/${genProgress.total}…`
-                    : "Generating…"
-                  : "Generate & download ZIP"}
+                    ? `${t("generating")} ${genProgress.done}/${genProgress.total}…`
+                    : t("geningDots")
+                  : t("genBtn")}
               </button>
             </div>
             {genProgress && (
