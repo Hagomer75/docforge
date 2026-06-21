@@ -71,6 +71,53 @@ function readImage(
   reader.readAsDataURL(file);
 }
 
+const I = (paths: React.ReactNode) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+    {paths}
+  </svg>
+);
+
+const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
+  "certificate-classic": I(
+    <>
+      <circle cx="12" cy="9" r="5" />
+      <path d="M9 13l-1.5 7L12 18l4.5 2L15 13" />
+    </>
+  ),
+  "progress-report": I(
+    <>
+      <rect x="5" y="3" width="14" height="18" rx="2" />
+      <path d="M9 8h6M9 12h6M9 16h3" />
+    </>
+  ),
+  "fee-receipt": I(
+    <>
+      <path d="M6 3h12v18l-2-1.5L14 21l-2-1.5L10 21l-2-1.5L6 21V3z" />
+      <path d="M9.5 8h5M9.5 12h5" />
+    </>
+  ),
+  "student-id-card": I(
+    <>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <circle cx="8" cy="11" r="2" />
+      <path d="M6 15.5c.7-1.2 3.3-1.2 4 0M14 10h4M14 13h3" />
+    </>
+  ),
+  "attendance-letter": I(
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M4 7l8 6 8-6" />
+    </>
+  ),
+  "enrollment-confirmation": I(
+    <>
+      <path d="M12 3l2.5 1.8 3-.2 1 2.9 2.4 1.7-1 2.8 1 2.8-2.4 1.7-1 2.9-3-.2L12 21l-2.5-1.8-3 .2-1-2.9L3.1 14l1-2.8-1-2.8 2.4-1.7 1-2.9 3 .2z" />
+      <path d="M9 12l2 2 4-4" />
+    </>
+  ),
+};
+const DEFAULT_ICON = I(<rect x="4" y="4" width="16" height="16" rx="2" />);
+
 export default function Home() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selected, setSelected] = useState<Template | null>(null);
@@ -362,8 +409,11 @@ export default function Home() {
                     className={"tcard" + (selected?.slug === t.slug ? " sel" : "")}
                     onClick={() => chooseTemplate(t)}
                   >
-                    <h3>{t.name}</h3>
-                    <p>{t.description}</p>
+                    <div className="tcard-ic">{TEMPLATE_ICONS[t.slug] ?? DEFAULT_ICON}</div>
+                    <div className="tcard-tx">
+                      <h3>{t.name}</h3>
+                      <p>{t.description}</p>
+                    </div>
                   </div>
                 ))}
               </div>
