@@ -1,6 +1,7 @@
 // Template definitions: field schema + HTML rendering used for the live
 // preview. PDF rendering for the same templates lives in ./pdf.ts and shares
 // the same field keys + render options so one mapping drives both.
+import { docLabels } from "./doclabels";
 
 export type Field = {
   key: string;
@@ -236,7 +237,17 @@ const DEFAULTS = {
   muted: "#6B7785",
 };
 
-const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap');`;
+const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600&family=Cairo:wght@400;600;700&display=swap');`;
+
+// Per-document direction + Arabic font override, injected into <head>.
+function dirAttrs(opts: RenderOpts): string {
+  return opts.lang === "ar" ? ` dir="rtl" lang="ar"` : "";
+}
+function arFont(opts: RenderOpts): string {
+  return opts.lang === "ar"
+    ? `*{font-family:'Cairo',sans-serif !important}`
+    : "";
+}
 
 function accentOf(branding?: Branding): string {
   const a = branding?.accent;
@@ -254,9 +265,10 @@ function sigTag(branding: Branding | undefined, maxH: number): string {
 }
 
 // Shared <head> styles every A4 document reuses.
-function docHead(edu: string): string {
+function docHead(edu: string, opts: RenderOpts): string {
   return `<style>
 ${FONTS}
+${arFont(opts)}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Inter',sans-serif;color:${DEFAULTS.ink};background:#fff;padding:34px 40px}
 .bhead{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid ${edu};padding-bottom:12px}
@@ -279,9 +291,10 @@ function bhead(title: string, edu: string, opts: RenderOpts, metaHtml: string): 
 }
 
 function signBlock(label: string, value: string, opts: RenderOpts, edu: string): string {
+  const D = docLabels(opts.lang ?? "en");
   return `<div class="sign">
   <span class="blk">${sigTag(opts.branding, 38)}<b>${esc(value) || "&nbsp;"}</b>${esc(label)}</span>
-  <span class="blk"><b style="border-color:${edu}">&nbsp;</b>Official stamp</span>
+  <span class="blk"><b style="border-color:${edu}">&nbsp;</b>${esc(D.officialStamp)}</span>
 </div>`;
 }
 
@@ -294,8 +307,10 @@ function certificateHTML(v: FieldValues, opts: RenderOpts): string {
   const pos = opts.branding?.logoPos ?? "center";
   const justify = pos === "left" ? "flex-start" : pos === "right" ? "flex-end" : "center";
   const hasHeader = !!(logo || school);
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
+  const D = docLabels(opts.lang ?? "en");
+  return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8"><style>
 ${FONTS}
+${arFont(opts)}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{font-family:'Inter',sans-serif;color:${DEFAULTS.ink};background:#fff;display:flex;align-items:center;justify-content:center;padding:18px}
@@ -314,15 +329,15 @@ body{font-family:'Inter',sans-serif;color:${DEFAULTS.ink};background:#fff;displa
 </style></head><body>
 <div class="cert"><div class="inner">
   ${hasHeader ? `<div class="head">${logo}${school ? `<span class="sn">${esc(school)}</span>` : ""}</div>` : `<div class="head" style="height:24px"></div>`}
-  <div class="kicker">Certificate of Achievement</div>
-  <div class="title">${esc(v.award_title) || "Award"}</div>
-  <div class="intro">This certificate is proudly presented to</div>
-  <div class="name">${esc(v.recipient_name) || "Recipient name"}</div>
+  <div class="kicker">${esc(D.certKicker)}</div>
+  <div class="title">${esc(v.award_title) || esc(D.awardDefault)}</div>
+  <div class="intro">${esc(D.presentedTo)}</div>
+  <div class="name">${esc(v.recipient_name) || esc(D.recipientName)}</div>
   ${v.detail ? `<div class="detail">${esc(v.detail)}</div>` : ""}
   <div class="foot">
-    <span><b>${esc(v.teacher) || "&nbsp;"}</b>Teacher</span>
-    <span><b>${esc(v.date) || "&nbsp;"}</b>Date</span>
-    <span><b>${esc(v.school) || "&nbsp;"}</b>School</span>
+    <span><b>${esc(v.teacher) || "&nbsp;"}</b>${esc(D.teacher)}</span>
+    <span><b>${esc(v.date) || "&nbsp;"}</b>${esc(D.date)}</span>
+    <span><b>${esc(v.school) || "&nbsp;"}</b>${esc(D.school)}</span>
   </div>
 </div></div>
 </body></html>`;
@@ -332,14 +347,15 @@ body{font-family:'Inter',sans-serif;color:${DEFAULTS.ink};background:#fff;displa
 
 function progressReportHTML(v: FieldValues, opts: RenderOpts): string {
   const edu = accentOf(opts.branding);
+  const D = docLabels(opts.lang ?? "en");
   const subjects = opts.subjects ?? [];
   const rowsHtml =
     subjects.length === 0
-      ? `<tr><td colspan="2" class="muted">No subjects selected — pick subject columns to fill this table.</td></tr>`
+      ? `<tr><td colspan="2" class="muted">${esc(D.noSubjects)}</td></tr>`
       : subjects
           .map((s) => `<tr><td>${esc(s.label)}</td><td class="mark">${esc(s.mark || "—")}</td></tr>`)
           .join("");
-  return `<!doctype html><html><head><meta charset="utf-8">${docHead(edu)}<style>
+  return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8">${docHead(edu, opts)}<style>
 .who{margin:18px 0;display:flex;gap:26px;font-size:14px}
 .who .lbl{color:${DEFAULTS.muted};font-size:11px;text-transform:uppercase;letter-spacing:.1em}
 .who b{font-size:16px;font-weight:600}
@@ -351,16 +367,16 @@ td.mark{font-weight:600;text-align:right}
 .comment .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:${DEFAULTS.gold};font-weight:600;margin-bottom:6px}
 .comment p{font-size:13.5px;line-height:1.6}
 </style></head><body>
-${bhead("Progress Report", edu, opts, `${esc(v.term) || ""}<br>${esc(v.date) || ""}`)}
+${bhead(D.prTitle, edu, opts, `${esc(v.term) || ""}<br>${esc(v.date) || ""}`)}
 <div class="who">
-  <div><div class="lbl">Student</div><b>${esc(v.student_name) || "Student name"}</b></div>
-  <div><div class="lbl">Class</div><b>${esc(v.class_name) || "—"}</b></div>
+  <div><div class="lbl">${esc(D.student)}</div><b>${esc(v.student_name) || esc(D.studentName)}</b></div>
+  <div><div class="lbl">${esc(D.klass)}</div><b>${esc(v.class_name) || "—"}</b></div>
 </div>
-<table><thead><tr><th>Subject</th><th style="text-align:right">Mark</th></tr></thead><tbody>${rowsHtml}</tbody></table>
-<div class="comment"><div class="lbl">Teacher's comment</div><p>${esc(v.comment) || "—"}</p></div>
+<table><thead><tr><th>${esc(D.subject)}</th><th style="text-align:right">${esc(D.mark)}</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+<div class="comment"><div class="lbl">${esc(D.teacherComment)}</div><p>${esc(v.comment) || "—"}</p></div>
 <div class="sign">
-  <span class="blk">${sigTag(opts.branding, 38)}<b>${esc(v.teacher) || "&nbsp;"}</b>Teacher</span>
-  <span class="blk"><b>&nbsp;</b>Signature</span>
+  <span class="blk">${sigTag(opts.branding, 38)}<b>${esc(v.teacher) || "&nbsp;"}</b>${esc(D.teacher)}</span>
+  <span class="blk"><b>&nbsp;</b>${esc(D.signature)}</span>
 </div>
 </body></html>`;
 }
@@ -369,7 +385,8 @@ ${bhead("Progress Report", edu, opts, `${esc(v.term) || ""}<br>${esc(v.date) || 
 
 function feeReceiptHTML(v: FieldValues, opts: RenderOpts): string {
   const edu = accentOf(opts.branding);
-  return `<!doctype html><html><head><meta charset="utf-8">${docHead(edu)}<style>
+  const D = docLabels(opts.lang ?? "en");
+  return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8">${docHead(edu, opts)}<style>
 .rmeta{display:flex;gap:30px;margin:18px 0;font-size:13px}
 .rmeta .lbl{color:${DEFAULTS.muted};font-size:11px;text-transform:uppercase;letter-spacing:.08em}
 .rmeta b{font-size:15px}
@@ -382,20 +399,20 @@ td.amt,th.amt{text-align:right;font-weight:600}
 .totals .row.grand{border-top:2px solid ${edu};margin-top:4px;padding-top:9px;font-weight:700;font-size:16px;color:${edu}}
 .pill{display:inline-block;font-size:12px;font-weight:600;color:#fff;background:${edu};border-radius:20px;padding:3px 12px}
 </style></head><body>
-${bhead("Fee Receipt", edu, opts, `Receipt: <b style="color:${DEFAULTS.ink}">${esc(v.receipt_no) || "—"}</b><br>${esc(v.date) || ""}`)}
+${bhead(D.frTitle, edu, opts, `${esc(D.receipt)}: <b style="color:${DEFAULTS.ink}">${esc(v.receipt_no) || "—"}</b><br>${esc(v.date) || ""}`)}
 <div class="rmeta">
-  <div><div class="lbl">Received from</div><b>${esc(v.student_name) || "Student name"}</b></div>
-  <div><div class="lbl">Method</div><b>${esc(v.payment_method) || "—"}</b></div>
+  <div><div class="lbl">${esc(D.receivedFrom)}</div><b>${esc(v.student_name) || esc(D.studentName)}</b></div>
+  <div><div class="lbl">${esc(D.method)}</div><b>${esc(v.payment_method) || "—"}</b></div>
 </div>
-<table><thead><tr><th>Description</th><th class="amt">Amount</th></tr></thead>
-<tbody><tr><td>${esc(v.fee_type) || "Tuition fee"}</td><td class="amt">${esc(v.amount) || "—"}</td></tr></tbody></table>
+<table><thead><tr><th>${esc(D.description)}</th><th class="amt">${esc(D.amount)}</th></tr></thead>
+<tbody><tr><td>${esc(v.fee_type) || esc(D.tuitionDefault)}</td><td class="amt">${esc(v.amount) || "—"}</td></tr></tbody></table>
 <div class="totals">
-  <div class="row"><span class="muted">Total</span><span>${esc(v.amount) || "—"}</span></div>
-  <div class="row"><span class="muted">Paid</span><span>${esc(v.amount_paid) || esc(v.amount) || "—"}</span></div>
-  <div class="row grand"><span>Balance</span><span>${esc(v.balance) || "0"}</span></div>
+  <div class="row"><span class="muted">${esc(D.total)}</span><span>${esc(v.amount) || "—"}</span></div>
+  <div class="row"><span class="muted">${esc(D.paid)}</span><span>${esc(v.amount_paid) || esc(v.amount) || "—"}</span></div>
+  <div class="row grand"><span>${esc(D.balance)}</span><span>${esc(v.balance) || "0"}</span></div>
 </div>
-<div style="margin-top:22px"><span class="pill">PAID</span></div>
-${signBlock("Received by", v.received_by, opts, edu)}
+<div style="margin-top:22px"><span class="pill">${esc(D.paidPill)}</span></div>
+${signBlock(D.receivedBy, v.received_by, opts, edu)}
 </body></html>`;
 }
 
@@ -411,6 +428,7 @@ function cardHTML(
   opts: RenderOpts
 ): string {
   const edu = accentOf(opts.branding);
+  const D = docLabels(opts.lang ?? "en");
   const school = opts.branding?.schoolName?.trim();
   const qr = opts.qrDataUrl
     ? `<img src="${opts.qrDataUrl}" style="width:78px;height:78px" alt="qr">`
@@ -421,8 +439,9 @@ function cardHTML(
   const rowsHtml = rows
     .map((r) => `<div class="rowi"><div class="k">${esc(r.k)}</div><div class="vv">${esc(r.v) || "—"}</div></div>`)
     .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
+  return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8"><style>
 ${FONTS}
+${arFont(opts)}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{font-family:'Inter',sans-serif;background:#fff;display:flex;align-items:center;justify-content:center;padding:24px}
@@ -447,13 +466,13 @@ body{font-family:'Inter',sans-serif;background:#fff;display:flex;align-items:cen
 <div class="card">
   <div class="cardtop">
     ${opts.branding?.logoDataUrl ? `<img class="logo" src="${opts.branding.logoDataUrl}" alt="logo">` : ""}
-    <span class="sn">${school ? esc(school) : "School name"}</span>
+    <span class="sn">${school ? esc(school) : esc(D.schoolNamePh)}</span>
     <span class="tag">${esc(tag)}</span>
   </div>
   <div class="cardbody">
     ${photo}
     <div class="info">
-      <div class="nm">${esc(name) || "Full name"}</div>
+      <div class="nm">${esc(name) || esc(D.studentName)}</div>
       <div class="role">${esc(role)}</div>
       ${rowsHtml}
     </div>
@@ -464,26 +483,30 @@ body{font-family:'Inter',sans-serif;background:#fff;display:flex;align-items:cen
 }
 
 function idCardHTML(v: FieldValues, opts: RenderOpts): string {
+  const D = docLabels(opts.lang ?? "en");
   return cardHTML(
-    "Student ID", "Student",
-    [{ k: "Class", v: v.class_name }, { k: "Valid until", v: v.valid_until }],
+    D.idTag, D.idRole,
+    [{ k: D.klass, v: v.class_name }, { k: D.validUntil, v: v.valid_until }],
     v.student_id || "ID-000", v.full_name, v, opts
   );
 }
 
 function libraryCardHTML(v: FieldValues, opts: RenderOpts): string {
+  const D = docLabels(opts.lang ?? "en");
   return cardHTML(
-    "Library", "Member",
-    [{ k: "Class", v: v.class_name }, { k: "Expires", v: v.expiry }],
+    D.libTag, D.libRole,
+    [{ k: D.klass, v: v.class_name }, { k: D.expires, v: v.expiry }],
     v.member_id || "MEM-000", v.full_name, v, opts
   );
 }
 
 function hallPassHTML(v: FieldValues, opts: RenderOpts): string {
   const edu = accentOf(opts.branding);
+  const D = docLabels(opts.lang ?? "en");
   const school = opts.branding?.schoolName?.trim();
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
+  return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8"><style>
 ${FONTS}
+${arFont(opts)}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{font-family:'Inter',sans-serif;background:#fff;display:flex;align-items:center;justify-content:center;padding:24px}
@@ -503,14 +526,14 @@ body{font-family:'Inter',sans-serif;background:#fff;display:flex;align-items:cen
 <div class="pass">
   <div class="stripe"></div>
   <div class="pb">
-    <div class="ptop"><span class="ptag">Corridor pass</span><span class="psn">${school ? esc(school) : ""}</span></div>
-    <div class="pttl">Hall Pass</div>
-    <div class="pnm">Permission for<b>${esc(v.student_name) || "Student name"}</b></div>
+    <div class="ptop"><span class="ptag">${esc(D.corridorPass)}</span><span class="psn">${school ? esc(school) : ""}</span></div>
+    <div class="pttl">${esc(D.hallPass)}</div>
+    <div class="pnm">${esc(D.permissionFor)}<b>${esc(v.student_name) || esc(D.studentName)}</b></div>
     <div class="grid">
-      <div><div class="k">Destination</div><div class="v">${esc(v.destination) || "—"}</div></div>
-      <div><div class="k">Time out</div><div class="v">${esc(v.time_out) || "—"}</div></div>
-      <div><div class="k">Date</div><div class="v">${esc(v.date) || "—"}</div></div>
-      <div><div class="k">Issued by</div><div class="v">${esc(v.teacher) || "—"}</div></div>
+      <div><div class="k">${esc(D.destination)}</div><div class="v">${esc(v.destination) || "—"}</div></div>
+      <div><div class="k">${esc(D.timeOut)}</div><div class="v">${esc(v.time_out) || "—"}</div></div>
+      <div><div class="k">${esc(D.date)}</div><div class="v">${esc(v.date) || "—"}</div></div>
+      <div><div class="k">${esc(D.issuedBy)}</div><div class="v">${esc(v.teacher) || "—"}</div></div>
     </div>
   </div>
 </div>
@@ -528,7 +551,7 @@ function letterHTML(
   opts: RenderOpts
 ): string {
   const edu = accentOf(opts.branding);
-  return `<!doctype html><html><head><meta charset="utf-8">${docHead(edu)}<style>
+  return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8">${docHead(edu, opts)}<style>
 .body{margin-top:26px;font-size:14px;line-height:1.75;color:${DEFAULTS.ink}}
 .body p{margin-bottom:14px}
 .body .greet{margin-bottom:18px}
@@ -543,63 +566,62 @@ ${signBlock(signLabel, signValue, opts, edu)}
 }
 
 function attendanceLetterHTML(v: FieldValues, opts: RenderOpts): string {
-  const greet = v.guardian ? `Dear ${esc(v.guardian)},` : "Dear Parent / Guardian,";
-  const msg =
-    esc(v.message) ||
-    `This letter is to formally notify you regarding the school attendance of your child, <b>${esc(v.student_name) || "the student"}</b>. We request your support in ensuring regular attendance going forward.`;
+  const D = docLabels(opts.lang ?? "en");
+  const greet = v.guardian ? esc(D.dearName(v.guardian)) : esc(D.dearGuardian);
+  const msg = esc(v.message) || esc(D.attMsg(v.student_name || D.theStudent));
   const body = `<p class="greet">${greet}</p>
   <div class="facts">
-    <div><div class="k">Student</div><div class="v">${esc(v.student_name) || "—"}</div></div>
-    <div><div class="k">Class</div><div class="v">${esc(v.class_name) || "—"}</div></div>
-    <div><div class="k">Attendance</div><div class="v">${esc(v.attendance_pct) || "—"}</div></div>
-    <div><div class="k">Days absent</div><div class="v">${esc(v.days_absent) || "—"}</div></div>
-    <div><div class="k">Period</div><div class="v">${esc(v.period) || "—"}</div></div>
+    <div><div class="k">${esc(D.student)}</div><div class="v">${esc(v.student_name) || "—"}</div></div>
+    <div><div class="k">${esc(D.klass)}</div><div class="v">${esc(v.class_name) || "—"}</div></div>
+    <div><div class="k">${esc(D.attendance)}</div><div class="v">${esc(v.attendance_pct) || "—"}</div></div>
+    <div><div class="k">${esc(D.daysAbsent)}</div><div class="v">${esc(v.days_absent) || "—"}</div></div>
+    <div><div class="k">${esc(D.period)}</div><div class="v">${esc(v.period) || "—"}</div></div>
   </div>
   <p>${msg}</p>
-  <p>Please contact the school office if you have any questions or wish to discuss the matter further.</p>`;
-  return letterHTML("Attendance Notice", body, v.signatory ? "" : "School administration", v.signatory, v, opts);
+  <p>${esc(D.attClose)}</p>`;
+  return letterHTML(D.attTitle, body, v.signatory ? "" : D.schoolAdmin, v.signatory, v, opts);
 }
 
 function enrollmentLetterHTML(v: FieldValues, opts: RenderOpts): string {
-  const status = esc(v.status) || "confirmed";
-  const body = `<p class="greet">To whom it may concern,</p>
-  <p>This is to certify that <b>${esc(v.student_name) || "the student"}</b> is ${status} for enrollment at our institution for the academic year <b>${esc(v.academic_year) || "—"}</b>.</p>
+  const D = docLabels(opts.lang ?? "en");
+  const status = esc(v.status) || esc(D.confirmedDefault);
+  const body = `<p class="greet">${esc(D.toWhom)}</p>
+  <p>${esc(D.enrBody(v.student_name || D.theStudent, status, v.academic_year || "—"))}</p>
   <div class="facts">
-    <div><div class="k">Student</div><div class="v">${esc(v.student_name) || "—"}</div></div>
-    <div><div class="k">Class / grade</div><div class="v">${esc(v.class_name) || "—"}</div></div>
-    <div><div class="k">Academic year</div><div class="v">${esc(v.academic_year) || "—"}</div></div>
-    <div><div class="k">Admission no.</div><div class="v">${esc(v.admission_no) || "—"}</div></div>
-    <div><div class="k">Status</div><div class="v">${status}</div></div>
+    <div><div class="k">${esc(D.student)}</div><div class="v">${esc(v.student_name) || "—"}</div></div>
+    <div><div class="k">${esc(D.classGrade)}</div><div class="v">${esc(v.class_name) || "—"}</div></div>
+    <div><div class="k">${esc(D.academicYear)}</div><div class="v">${esc(v.academic_year) || "—"}</div></div>
+    <div><div class="k">${esc(D.admissionNo)}</div><div class="v">${esc(v.admission_no) || "—"}</div></div>
+    <div><div class="k">${esc(D.statusLbl)}</div><div class="v">${status}</div></div>
   </div>
-  <p>This confirmation is issued upon request and may be used for official purposes.</p>`;
-  return letterHTML("Enrollment Confirmation", body, "Authorised signatory", v.signatory, v, opts);
+  <p>${esc(D.enrClose)}</p>`;
+  return letterHTML(D.enrTitle, body, D.authSignatory, v.signatory, v, opts);
 }
 
 function permissionSlipHTML(v: FieldValues, opts: RenderOpts): string {
-  const greet = v.guardian ? `Dear ${esc(v.guardian)},` : "Dear Parent / Guardian,";
+  const D = docLabels(opts.lang ?? "en");
+  const greet = v.guardian ? esc(D.dearName(v.guardian)) : esc(D.dearGuardian);
   const body = `<p class="greet">${greet}</p>
-  <p>Your child <b>${esc(v.student_name) || "the student"}</b> has been invited to take part in <b>${esc(v.event) || "a school activity"}</b>. We are seeking your permission for them to attend.</p>
+  <p>${esc(D.permBody(v.student_name || D.theStudent, v.event || D.activityDefault))}</p>
   <div class="facts">
-    <div><div class="k">Activity</div><div class="v">${esc(v.event) || "—"}</div></div>
-    <div><div class="k">Date</div><div class="v">${esc(v.event_date) || "—"}</div></div>
-    <div><div class="k">Location</div><div class="v">${esc(v.location) || "—"}</div></div>
-    <div><div class="k">Cost</div><div class="v">${esc(v.cost) || "—"}</div></div>
+    <div><div class="k">${esc(D.activity)}</div><div class="v">${esc(v.event) || "—"}</div></div>
+    <div><div class="k">${esc(D.date)}</div><div class="v">${esc(v.event_date) || "—"}</div></div>
+    <div><div class="k">${esc(D.location)}</div><div class="v">${esc(v.location) || "—"}</div></div>
+    <div><div class="k">${esc(D.cost)}</div><div class="v">${esc(v.cost) || "—"}</div></div>
   </div>
-  <p>Please sign below to give consent for your child to participate. Return this slip to the school office by the date indicated.</p>`;
-  return letterHTML("Permission Slip", body, "Parent / guardian signature", "", v, opts);
+  <p>${esc(D.permClose)}</p>`;
+  return letterHTML(D.permTitle, body, D.parentSig, "", v, opts);
 }
 
 function referenceLetterHTML(v: FieldValues, opts: RenderOpts): string {
+  const D = docLabels(opts.lang ?? "en");
   const who = v.role
-    ? `${esc(v.student_name) || "the student"}, ${esc(v.role)}`
-    : `${esc(v.student_name) || "the student"}`;
-  const body = `<p class="greet">To whom it may concern,</p>
-  <p>${
-    esc(v.body) ||
-    `I am pleased to provide this reference for <b>${who}</b>. Throughout the time I have known them, they have consistently demonstrated strong character, reliability, and ability. I recommend them without reservation and am confident they will be a valuable addition to any institution or programme.`
-  }</p>
-  <p>Please do not hesitate to contact me should you require any further information.</p>`;
-  return letterHTML("Reference Letter", body, esc(v.position) || "Authorised signatory", v.signatory, v, opts);
+    ? `${v.student_name || D.theStudent}, ${v.role}`
+    : `${v.student_name || D.theStudent}`;
+  const body = `<p class="greet">${esc(D.toWhom)}</p>
+  <p>${esc(v.body) || esc(D.refBody(who))}</p>
+  <p>${esc(D.refClose)}</p>`;
+  return letterHTML(D.refTitle, body, v.position || D.authSignatory, v.signatory, v, opts);
 }
 
 export function renderHTML(slug: string, v: FieldValues, opts: RenderOpts = {}): string {
