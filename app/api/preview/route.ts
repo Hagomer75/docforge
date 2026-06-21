@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const { templateSlug, mapping, subjectColumns, branding, row, lang, labels } = await req.json();
+    const { templateSlug, mapping, subjectColumns, branding, row, lang, labels, cardOrientation, cardBack } = await req.json();
     const template = getTemplate(templateSlug);
     if (!template) {
       return NextResponse.json({ error: "Unknown template." }, { status: 400 });
@@ -33,6 +33,8 @@ export async function POST(req: NextRequest) {
         photoDataUrl: photo,
         lang: lang === "ar" ? "ar" : "en",
         labels,
+        cardOrientation: cardOrientation === "portrait" ? "portrait" : "landscape",
+        cardBack: !!cardBack,
       }),
     });
   } catch {

@@ -46,6 +46,12 @@ const S = {
   libRole: { en: "Member", ar: "عضو" },
   validUntil: { en: "Valid until", ar: "صالحة حتى" },
   expires: { en: "Expires", ar: "تنتهي" },
+  cardTerms: {
+    en: "This card is property of the school and must be returned on request. Use is non-transferable.",
+    ar: "هذه البطاقة ملك للمدرسة ويجب إعادتها عند الطلب. الاستخدام غير قابل للتحويل.",
+  },
+  cardReturn: { en: "If found, please return to", ar: "في حال العثور عليها، يُرجى إعادتها إلى" },
+  cardEmergency: { en: "Emergency contact", ar: "جهة الاتصال للطوارئ" },
 
   corridorPass: { en: "Corridor pass", ar: "تصريح ممرات" },
   hallPass: { en: "Hall Pass", ar: "تصريح مرور" },
@@ -102,8 +108,8 @@ export const EDITABLE_LABELS: Record<string, LabelKey[]> = {
   "certificate-classic": ["certKicker", "presentedTo", "teacher", "date", "school"],
   "progress-report": ["prTitle", "student", "klass", "subject", "mark", "teacherComment"],
   "fee-receipt": ["frTitle", "receivedFrom", "method", "description", "total", "paid", "balance", "paidPill", "receivedBy"],
-  "student-id-card": ["idTag", "idRole", "validUntil"],
-  "library-card": ["libTag", "libRole", "expires"],
+  "student-id-card": ["idTag", "idRole", "validUntil", "cardTerms", "cardReturn", "cardEmergency"],
+  "library-card": ["libTag", "libRole", "expires", "cardTerms", "cardReturn", "cardEmergency"],
   "hall-pass": ["corridorPass", "hallPass", "permissionFor", "destination", "timeOut", "issuedBy"],
   "attendance-letter": ["attTitle", "attClose", "attendance", "daysAbsent", "period", "schoolAdmin"],
   "enrollment-confirmation": ["enrTitle", "toWhom", "enrClose", "academicYear", "admissionNo", "statusLbl", "authSignatory"],

@@ -50,7 +50,10 @@ export async function POST(req: NextRequest) {
       cardsPerPage,
       cutGuides,
       labels,
+      cardOrientation,
+      cardBack,
     } = await req.json();
+    const orient = cardOrientation === "portrait" ? "portrait" : "landscape";
     const template = getTemplate(templateSlug);
     if (!template) {
       return NextResponse.json({ error: "Unknown template." }, { status: 400 });
@@ -109,6 +112,8 @@ export async function POST(req: NextRequest) {
         cardsPerPage,
         cutGuides,
         labels,
+        cardOrientation: orient,
+        // backs are for single-card duplex printing, not N-up sheets
       });
       return NextResponse.json({
         sheet: true,
@@ -130,6 +135,8 @@ export async function POST(req: NextRequest) {
         photoDataUrl: photos[i],
         lang: lang === "ar" ? "ar" : "en",
         labels,
+        cardOrientation: orient,
+        cardBack: !!cardBack,
       });
       const base = applyPattern(
         filenamePattern,

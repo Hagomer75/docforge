@@ -216,6 +216,8 @@ export type RenderOpts = {
   cardsPerPage?: 1 | 2 | 4 | 10; // card-sheet tiling (cards only)
   cutGuides?: boolean; // draw corner cut marks on card sheets
   labels?: Record<string, string>; // user overrides for printed wording
+  cardBack?: boolean; // render a 2nd CR80 back face (id/library cards only)
+  cardOrientation?: "landscape" | "portrait"; // id/library layout (default landscape)
 };
 
 // Map each font style to display/body CSS families for the HTML preview.
@@ -466,6 +468,7 @@ function cardHTML(
   const edu = accentOf(opts.branding);
   const D = docLabels(opts.lang ?? "en", opts.labels);
   const school = opts.branding?.schoolName?.trim();
+  const portrait = opts.cardOrientation === "portrait";
   const qr = opts.qrDataUrl
     ? `<img src="${opts.qrDataUrl}" style="width:64px;height:64px" alt="qr">`
     : `<div class="qrph">QR</div>`;
@@ -484,7 +487,7 @@ ${arFont(opts)}
 ${fontVars(opts)}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
-body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;justify-content:center;padding:24px}
+body{font-family:var(--f-body);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px}
 .card{width:430px;height:271px;border-radius:14px;overflow:hidden;border:1px solid ${DEFAULTS.line};box-shadow:0 18px 40px -24px rgba(28,42,57,.5);display:flex;flex-direction:column}
 .cardtop{background:${edu};color:#fff;padding:13px 18px;display:flex;align-items:center;gap:10px;border-bottom:3px solid rgba(255,255,255,.28)}
 .cardtop img.logo{max-height:30px;max-width:120px;object-fit:contain;filter:brightness(0) invert(1)}
@@ -512,8 +515,25 @@ body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;j
 .barcode{display:flex;height:22px;width:100%;align-items:stretch}
 .barcode span{display:block;height:100%}
 .bcnum{margin-top:3px;text-align:center;font-size:9px;font-weight:600;letter-spacing:.32em;color:${DEFAULTS.ink};font-variant-numeric:tabular-nums}
+.card.portrait{width:271px;height:430px}
+.card.portrait .cardbody{flex-direction:column;align-items:center;text-align:center;gap:8px;padding:14px 16px}
+.card.portrait .frame{margin-top:0}
+.card.portrait .photo{width:92px;height:116px}
+.card.portrait .info{flex:none;align-self:stretch;align-items:center;display:flex;flex-direction:column}
+.card.portrait .info .role{margin-bottom:6px}
+.card.portrait .grid{grid-template-columns:1fr;justify-items:center;gap:7px}
+.card.portrait .vv{white-space:normal;text-align:center}
+.card.portrait .sig{display:none}
+.card.portrait .qrwrap{justify-content:center;margin-top:4px}
+.cardback{justify-content:flex-start}
+.cardback .mag{height:38px;background:${DEFAULTS.ink};margin:16px 0}
+.cardback .bk{padding:0 18px 18px;display:flex;flex-direction:column;gap:14px}
+.cardback .terms{font-size:10px;line-height:1.55;color:${DEFAULTS.muted}}
+.cardback .backsec .k{font-size:8.5px;text-transform:uppercase;letter-spacing:.1em;color:${DEFAULTS.muted};margin-bottom:3px}
+.cardback .backsec .v{font-size:13px;font-weight:600;color:${DEFAULTS.ink}}
+.cardback .eline{height:1px;background:${DEFAULTS.line};margin-top:18px}
 </style></head><body>
-<div class="card">
+<div class="card${portrait ? " portrait" : ""}">
   <div class="cardtop">
     ${opts.branding?.logoDataUrl ? `<img class="logo" src="${opts.branding.logoDataUrl}" alt="logo">` : ""}
     <span class="sn">${school ? esc(school) : esc(D.schoolNamePh)}</span>
@@ -534,6 +554,20 @@ body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;j
     <div class="bcnum">${esc(idValue)}</div>
   </div>
 </div>
+${opts.cardBack ? `<div class="card cardback${portrait ? " portrait" : ""}">
+  <div class="mag"></div>
+  <div class="bk">
+    <div class="terms">${esc(D.cardTerms)}</div>
+    <div class="backsec">
+      <div class="k">${esc(D.cardReturn)}</div>
+      <div class="v">${school ? esc(school) : esc(D.schoolNamePh)}</div>
+    </div>
+    <div class="backsec">
+      <div class="k">${esc(D.cardEmergency)}</div>
+      <div class="eline"></div>
+    </div>
+  </div>
+</div>` : ""}
 </body></html>`;
 }
 
@@ -559,6 +593,11 @@ function hallPassHTML(v: FieldValues, opts: RenderOpts): string {
   const edu = accentOf(opts.branding);
   const D = docLabels(opts.lang ?? "en", opts.labels);
   const school = opts.branding?.schoolName?.trim();
+  // No real id column — seed a footer barcode from the date + time-out, if any.
+  const passId = `${v.date || ""}${v.time_out ? " " + v.time_out : ""}`.trim();
+  const foot = passId
+    ? `<div class="cardfoot"><div class="barcode">${barcodeSpans(passId, DEFAULTS.ink)}</div><div class="bcnum">${esc(passId)}</div></div>`
+    : "";
   return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8"><style>
 ${FONTS}
 ${arFont(opts)}
@@ -566,23 +605,30 @@ ${fontVars(opts)}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;justify-content:center;padding:24px}
-.pass{width:460px;height:240px;border-radius:14px;overflow:hidden;border:1px solid ${DEFAULTS.line};box-shadow:0 18px 40px -24px rgba(28,42,57,.5);display:flex}
-.stripe{width:12px;background:${edu};flex-shrink:0}
-.pb{flex:1;padding:18px 22px;display:flex;flex-direction:column}
-.ptop{display:flex;align-items:center;justify-content:space-between}
-.ptag{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:${edu};font-weight:700}
-.psn{font-size:11px;color:${DEFAULTS.muted}}
-.pttl{font-family:var(--f-display);font-weight:700;font-size:27px;color:${DEFAULTS.ink};margin:1px 0 12px}
+.pass{width:460px;border-radius:14px;overflow:hidden;border:1px solid ${DEFAULTS.line};box-shadow:0 18px 40px -24px rgba(28,42,57,.5);display:flex;flex-direction:column}
+.cardtop{background:${edu};color:#fff;padding:13px 18px;display:flex;align-items:center;gap:10px;border-bottom:3px solid rgba(255,255,255,.28)}
+.cardtop img.logo{max-height:30px;max-width:120px;object-fit:contain;filter:brightness(0) invert(1)}
+.cardtop .sn{font-family:var(--f-display);font-weight:600;font-size:15px}
+.cardtop .tag{margin-left:auto;font-size:9px;letter-spacing:.18em;text-transform:uppercase;opacity:.9;font-weight:600}
+.pb{padding:16px 22px 20px;display:flex;flex-direction:column}
+.pttl{font-family:var(--f-display);font-weight:700;font-size:26px;color:${DEFAULTS.ink};margin:0 0 10px}
 .pnm{font-size:13px;color:${DEFAULTS.muted}}
 .pnm b{font-family:var(--f-display);font-weight:600;font-size:20px;color:${DEFAULTS.ink};display:block}
-.grid{margin-top:auto;display:flex;gap:30px}
+.grid{margin-top:16px;display:flex;gap:28px;flex-wrap:wrap}
 .grid .k{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:${DEFAULTS.muted}}
 .grid .v{font-size:15px;font-weight:600;color:${DEFAULTS.ink}}
+.cardfoot{background:${DEFAULTS.paper};border-top:1px solid ${DEFAULTS.line};padding:6px 18px 7px}
+.barcode{display:flex;height:22px;width:100%;align-items:stretch}
+.barcode span{display:block;height:100%}
+.bcnum{margin-top:3px;text-align:center;font-size:9px;font-weight:600;letter-spacing:.32em;color:${DEFAULTS.ink};font-variant-numeric:tabular-nums}
 </style></head><body>
 <div class="pass">
-  <div class="stripe"></div>
+  <div class="cardtop">
+    ${opts.branding?.logoDataUrl ? `<img class="logo" src="${opts.branding.logoDataUrl}" alt="logo">` : ""}
+    <span class="sn">${school ? esc(school) : esc(D.schoolNamePh)}</span>
+    <span class="tag">${esc(D.corridorPass)}</span>
+  </div>
   <div class="pb">
-    <div class="ptop"><span class="ptag">${esc(D.corridorPass)}</span><span class="psn">${school ? esc(school) : ""}</span></div>
     <div class="pttl">${esc(D.hallPass)}</div>
     <div class="pnm">${esc(D.permissionFor)}<b>${esc(v.student_name) || esc(D.studentName)}</b></div>
     <div class="grid">
@@ -592,6 +638,7 @@ body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;j
       <div><div class="k">${esc(D.issuedBy)}</div><div class="v">${esc(v.teacher) || "—"}</div></div>
     </div>
   </div>
+  ${foot}
 </div>
 </body></html>`;
 }

@@ -451,12 +451,57 @@ function drawBarcode(
   }
 }
 
+// Greedy word-wrap (pdf-lib has no auto-wrap). Returns lines fitting maxW at size.
+function wrapText(text: string, font: PDFFont, size: number, maxW: number): string[] {
+  const words = (text || "").split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+  for (const w of words) {
+    const trial = line ? line + " " + w : w;
+    if (font.widthOfTextAtSize(SH(trial), size) > maxW && line) {
+      lines.push(line);
+      line = w;
+    } else {
+      line = trial;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+// Second CR80 face: terms, "if found return to", emergency contact, magstripe.
+async function drawCardBack(doc: PDFDocument, cfg: CardCfg, opts: RenderOpts): Promise<void> {
+  const portrait = opts.cardOrientation === "portrait";
+  const W = portrait ? 227 : 360, H = portrait ? 360 : 227, M = 16;
+  const page = doc.addPage([W, H]);
+  patchDraw(page);
+  whiteBg(page);
+  const { sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
+  const D = docLabels(opts.lang ?? "en", opts.labels);
+
+  // faux magnetic stripe near the top
+  page.drawRectangle({ x: 0, y: H - 54, width: W, height: 30, color: C.ink });
+
+  let y = H - 80;
+  for (const line of wrapText(D.cardTerms, sans, 8, W - M * 2)) {
+    page.drawText(line, { x: M, y, size: 8, font: sans, color: C.muted });
+    y -= 12;
+  }
+  y -= 14;
+  page.drawText(D.cardReturn.toUpperCase(), { x: M, y, size: 7, font: sans, color: C.muted });
+  page.drawText(opts.branding?.schoolName?.trim() || D.schoolNamePh, { x: M, y: y - 14, size: 11, font: sansB, color: C.ink });
+  y -= 40;
+  page.drawText(D.cardEmergency.toUpperCase(), { x: M, y, size: 7, font: sans, color: C.muted });
+  page.drawLine({ start: { x: M, y: y - 14 }, end: { x: W - M, y: y - 14 }, thickness: 0.75, color: C.line });
+}
+
 async function cardPDF(
   doc: PDFDocument,
   cfg: CardCfg,
   opts: RenderOpts
 ): Promise<void> {
-  const W = 360, H = 227;
+  const portrait = opts.cardOrientation === "portrait";
+  const W = portrait ? 227 : 360, H = portrait ? 360 : 227;
   const page = doc.addPage([W, H]);
   patchDraw(page);
   whiteBg(page);
@@ -477,6 +522,48 @@ async function cardPDF(
   });
   const tw = sans.widthOfTextAtSize(SH(cfg.tag), 8);
   page.drawText(cfg.tag, { x: W - M - tw, y: H - 25, size: 8, font: sans, color: white });
+
+  if (portrait) {
+    // PORTRAIT (lanyard) layout: photo top-centre, stacked centred fields, QR, barcode.
+    const cx = W / 2;
+    const pfW = 86, pfH = 96, pfX = (W - pfW) / 2, pfTop = H - headH - 14;
+    page.drawRectangle({ x: pfX - 2, y: pfTop - pfH - 2, width: pfW + 4, height: pfH + 4, color: edu });
+    page.drawRectangle({ x: pfX, y: pfTop - pfH, width: pfW, height: pfH, color: C.paper });
+    const pPhoto = await embedDataUrl(doc, opts.photoDataUrl, pfH, pfW);
+    if (pPhoto) {
+      page.drawImage(pPhoto.image, {
+        x: pfX + (pfW - pPhoto.w) / 2,
+        y: pfTop - pfH + (pfH - pPhoto.h) / 2,
+        width: pPhoto.w, height: pPhoto.h,
+      });
+    }
+    const nm = cfg.name || D.studentName;
+    let py = pfTop - pfH - 18;
+    page.drawText(nm, { x: cx - serifB.widthOfTextAtSize(SH(nm), 14) / 2, y: py, size: 14, font: serifB, color: C.ink });
+    const ro = cfg.role.toUpperCase();
+    py -= 13;
+    page.drawText(ro, { x: cx - sans.widthOfTextAtSize(SH(ro), 7) / 2, y: py, size: 7, font: sans, color: C.muted });
+    py -= 24;
+    cfg.rows.forEach((r) => {
+      const k = r.k.toUpperCase(), val = r.v || "—";
+      page.drawText(k, { x: cx - sans.widthOfTextAtSize(SH(k), 7) / 2, y: py, size: 7, font: sans, color: C.muted });
+      page.drawText(val, { x: cx - sansB.widthOfTextAtSize(SH(val), 11) / 2, y: py - 12, size: 11, font: sansB, color: C.ink });
+      py -= 27;
+    });
+    // QR centred below the last field, clamped to sit above the footer.
+    const pqr = 58, pqrX = cx - pqr / 2, pqrY = Math.max(footH + 10, py - pqr + 6);
+    const pQr = await embedDataUrl(doc, opts.qrDataUrl, pqr, pqr);
+    if (pQr) page.drawImage(pQr.image, { x: pqrX, y: pqrY, width: pQr.w, height: pQr.h });
+    else page.drawRectangle({ x: pqrX, y: pqrY, width: pqr, height: pqr, borderColor: C.line, borderWidth: 1 });
+
+    page.drawRectangle({ x: 0, y: 0, width: W, height: footH, color: C.paper });
+    page.drawLine({ start: { x: 0, y: footH }, end: { x: W, y: footH }, thickness: 0.75, color: C.line });
+    drawBarcode(page, M, 13, W - M * 2, 11, cfg.idValue);
+    const pid = cfg.idValue || "";
+    page.drawText(pid, { x: (W - sansB.widthOfTextAtSize(SH(pid), 8)) / 2, y: 3, size: 8, font: sansB, color: C.ink });
+    if (opts.cardBack) await drawCardBack(doc, cfg, opts);
+    return;
+  }
 
   // photo (left) in an accent frame
   const fX = M, fW = 60, fH = 74, fTop = H - headH - 12;
@@ -536,6 +623,8 @@ async function cardPDF(
   const idTxt = cfg.idValue || "";
   const idw = sansB.widthOfTextAtSize(SH(idTxt), 8);
   page.drawText(idTxt, { x: (W - idw) / 2, y: 3, size: 8, font: sansB, color: C.ink });
+
+  if (opts.cardBack) await drawCardBack(doc, cfg, opts);
 }
 
 async function idCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
@@ -557,29 +646,31 @@ async function libraryCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts
 }
 
 async function hallPassPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
-  const W = 400, H = 200;
+  const W = 400, H = 215;
   const page = doc.addPage([W, H]);
   patchDraw(page);
   whiteBg(page);
   const edu = accentColor(opts.branding);
   const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
   const D = docLabels(opts.lang ?? "en", opts.labels);
+  const white = rgb(1, 1, 1);
+  const headH = 44, footH = 30, M = 22;
+  const passId = `${v.date || ""}${v.time_out ? " " + v.time_out : ""}`.trim();
 
-  page.drawRectangle({ x: 0, y: 0, width: 10, height: H, color: edu });
-  const M = 28;
-  let y = H - 28;
-  page.drawText(D.corridorPass, { x: M, y, size: 8, font: sansB, color: edu });
-  const school = opts.branding?.schoolName?.trim();
-  if (school) {
-    const w = sans.widthOfTextAtSize(SH(school), 9);
-    page.drawText(school, { x: W - 18 - w, y, size: 9, font: sans, color: C.muted });
-  }
-  y -= 26;
-  page.drawText(D.hallPass, { x: M, y, size: 24, font: serifB, color: C.ink });
-  y -= 22;
-  page.drawText(D.permissionFor, { x: M, y, size: 9, font: sans, color: C.muted });
+  // header band + soft accent rule (matches cardPDF)
+  page.drawRectangle({ x: 0, y: H - headH, width: W, height: headH, color: edu });
+  page.drawRectangle({ x: 0, y: H - headH - 3, width: W, height: 3, color: edu, opacity: 0.55 });
+  page.drawText(opts.branding?.schoolName?.trim() || D.schoolNamePh, { x: M, y: H - 27, size: 13, font: serifB, color: white });
+  const tw = sans.widthOfTextAtSize(SH(D.corridorPass), 8);
+  page.drawText(D.corridorPass, { x: W - M - tw, y: H - 25, size: 8, font: sans, color: white });
+
+  // body
+  let y = H - headH - 24;
+  page.drawText(D.hallPass, { x: M, y, size: 22, font: serifB, color: C.ink });
   y -= 18;
-  page.drawText(v.student_name || D.studentName, { x: M, y, size: 18, font: serifB, color: C.ink });
+  page.drawText(D.permissionFor, { x: M, y, size: 9, font: sans, color: C.muted });
+  y -= 16;
+  page.drawText(v.student_name || D.studentName, { x: M, y, size: 17, font: serifB, color: C.ink });
 
   const cells: [string, string][] = [
     [D.destination, v.destination],
@@ -587,12 +678,22 @@ async function hallPassPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): 
     [D.date, v.date],
     [D.issuedBy, v.teacher],
   ];
-  const cw = (W - M - 18) / 4;
+  const cw = (W - M * 2) / 4;
+  const gy = footH + 26;
   cells.forEach(([k, val], i) => {
     const cx = M + i * cw;
-    page.drawText(k.toUpperCase(), { x: cx, y: 44, size: 8, font: sans, color: C.muted });
-    page.drawText(val || "—", { x: cx, y: 28, size: 13, font: sansB, color: C.ink });
+    page.drawText(k.toUpperCase(), { x: cx, y: gy, size: 8, font: sans, color: C.muted });
+    page.drawText(val || "—", { x: cx, y: gy - 14, size: 13, font: sansB, color: C.ink });
   });
+
+  // footer: paper band + divider + optional barcode/id
+  page.drawRectangle({ x: 0, y: 0, width: W, height: footH, color: C.paper });
+  page.drawLine({ start: { x: 0, y: footH }, end: { x: W, y: footH }, thickness: 0.75, color: C.line });
+  if (passId) {
+    drawBarcode(page, M, 13, W - M * 2, 11, passId);
+    const idw = sansB.widthOfTextAtSize(SH(passId), 8);
+    page.drawText(passId, { x: (W - idw) / 2, y: 3, size: 8, font: sansB, color: C.ink });
+  }
 }
 
 /* ---------- letters ---------- */
@@ -733,10 +834,24 @@ type Layout = {
 
 // Tiling layout for a card slug at N-up. Card native sizes: id/library 360x227,
 // hall-pass 400x200.
-function sheetLayout(slug: string, n: number): Layout {
+function sheetLayout(slug: string, n: number, portrait = false): Layout {
   const isHall = slug === "hall-pass";
-  const baseW = isHall ? 400 : 360;
-  const baseH = isHall ? 200 : 227;
+  const baseW = isHall ? 400 : portrait ? 227 : 360;
+  const baseH = isHall ? 215 : portrait ? 360 : 227;
+  if (portrait && !isHall && n > 1) {
+    // Tall cards: pick a grid then scale by BOTH width and height so nothing
+    // overflows A4. 10-up uses 3x4 (12 slots, fits 10).
+    const grid = n === 10 ? { cols: 3, rows: 4 } : n === 4 ? { cols: 2, rows: 2 } : { cols: 2, rows: 1 };
+    const { cols, rows } = grid;
+    const gapX = 16, gapY = 14, marginMin = 32;
+    const availW = A4.w - 2 * marginMin - (cols - 1) * gapX;
+    const availH = A4.h - 2 * marginMin - (rows - 1) * gapY;
+    const scale = Math.min(availW / cols / baseW, availH / rows / baseH, 1);
+    const cw = baseW * scale, ch = baseH * scale;
+    const marginX = (A4.w - (cols * cw + (cols - 1) * gapX)) / 2;
+    const marginY = (A4.h - (rows * ch + (rows - 1) * gapY)) / 2;
+    return { cols, rows, cw, ch, gapX, gapY, marginX, marginY, scale };
+  }
   if (n === 10 && !isHall) {
     const cols = 2, rows = 5, gapX = 18, gapY = 14, marginX = 40, marginY = 40;
     const cw = (A4.w - 2 * marginX - gapX) / cols;
@@ -779,7 +894,7 @@ export async function renderCardSheet(
 ): Promise<Uint8Array> {
   curLang = opts.lang === "ar" ? "ar" : "en";
   const out = await PDFDocument.create();
-  const L = sheetLayout(slug, opts.cardsPerPage ?? 1);
+  const L = sheetLayout(slug, opts.cardsPerPage ?? 1, opts.cardOrientation === "portrait" && slug !== "hall-pass");
   const perPage = L.cols * L.rows;
   let page = out.addPage([A4.w, A4.h]);
   whiteBg(page);
@@ -793,6 +908,7 @@ export async function renderCardSheet(
     const cardBytes = await renderPDF(slug, rows[i].v, {
       ...opts,
       cardsPerPage: 1,
+      cardBack: false, // sheets are front-only; backs are for single-card duplex
       qrDataUrl: rows[i].qrDataUrl,
       photoDataUrl: rows[i].photoDataUrl,
     });

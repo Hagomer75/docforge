@@ -207,6 +207,8 @@ export default function Home() {
   const [editing, setEditing] = useState(false);
   const [cardsPerPage, setCardsPerPage] = useState<1 | 2 | 4 | 10>(1);
   const [cutGuides, setCutGuides] = useState(true);
+  const [cardOrientation, setCardOrientation] = useState<"landscape" | "portrait">("landscape");
+  const [cardBack, setCardBack] = useState(false);
   const [photoMap, setPhotoMap] = useState<Record<string, string>>({});
   const [photoNameMap, setPhotoNameMap] = useState<Record<string, string>>({});
   const [rowPhotos, setRowPhotos] = useState<Record<number, string>>({});
@@ -324,6 +326,8 @@ export default function Home() {
             row: withPhotos([upload.rows[idx]], idx)[0],
             lang,
             labels: labelOverrides[lang],
+            cardOrientation,
+            cardBack,
           }),
         });
         const { html } = await r.json();
@@ -333,7 +337,7 @@ export default function Home() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex, lang, labelOverrides, photoMap, photoNameMap, rowPhotos]);
+  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex, lang, labelOverrides, photoMap, photoNameMap, rowPhotos, cardOrientation, cardBack]);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -379,6 +383,8 @@ export default function Home() {
     setFilenamePattern("");
     setPreviewIndex(0);
     setCardsPerPage(1); // reset sheet mode when switching templates
+    setCardOrientation("landscape");
+    setCardBack(false);
     setPhotoMap({}); // photos are matched per template's ID field
     setPhotoNameMap({});
     setRowPhotos({});
@@ -434,6 +440,8 @@ export default function Home() {
       lang,
       cardsPerPage,
       cutGuides,
+      cardOrientation,
+      cardBack,
       labels: labelOverrides[lang],
     };
   }
@@ -1017,6 +1025,35 @@ export default function Home() {
                       />
                       {t("cutGuides")}
                     </label>
+                  )}
+                  {selected.slug !== "hall-pass" && (
+                    <div style={{ marginTop: 16 }}>
+                      <div className="section-h" style={{ marginBottom: 6 }}>{t("cardOrientation")}</div>
+                      <div className="seg" style={{ maxWidth: 240 }}>
+                        <button
+                          className={"seg-btn" + (cardOrientation === "landscape" ? " on" : "")}
+                          onClick={() => setCardOrientation("landscape")}
+                        >
+                          {t("orientationLandscape")}
+                        </button>
+                        <button
+                          className={"seg-btn" + (cardOrientation === "portrait" ? " on" : "")}
+                          onClick={() => setCardOrientation("portrait")}
+                        >
+                          {t("orientationPortrait")}
+                        </button>
+                      </div>
+                      {cardsPerPage === 1 && (
+                        <label className="chip" style={{ marginTop: 12 }}>
+                          <input
+                            type="checkbox"
+                            checked={cardBack}
+                            onChange={(e) => setCardBack(e.target.checked)}
+                          />
+                          {t("cardBack")}
+                        </label>
+                      )}
+                    </div>
                   )}
                   <p className="hint" style={{ marginTop: 8 }}>
                     {t("sheetHint")}
