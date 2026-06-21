@@ -105,14 +105,42 @@ const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
   ),
   "attendance-letter": I(
     <>
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="M4 7l8 6 8-6" />
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 9h18M8 3v4M16 3v4" />
+      <path d="M8.5 15l2 2 4-4" />
     </>
   ),
   "enrollment-confirmation": I(
     <>
       <path d="M12 3l2.5 1.8 3-.2 1 2.9 2.4 1.7-1 2.8 1 2.8-2.4 1.7-1 2.9-3-.2L12 21l-2.5-1.8-3 .2-1-2.9L3.1 14l1-2.8-1-2.8 2.4-1.7 1-2.9 3 .2z" />
       <path d="M9 12l2 2 4-4" />
+    </>
+  ),
+  "library-card": I(
+    <>
+      <path d="M4 5a2 2 0 012-2h12v18H6a2 2 0 01-2-2z" />
+      <path d="M8 3v16" />
+    </>
+  ),
+  "hall-pass": I(
+    <>
+      <rect x="4" y="3" width="9" height="18" rx="1" />
+      <circle cx="10" cy="12" r="1" />
+      <path d="M15 12h6M18 9l3 3-3 3" />
+    </>
+  ),
+  "permission-slip": I(
+    <>
+      <rect x="6" y="4" width="12" height="17" rx="2" />
+      <path d="M9 4V3a1 1 0 011-1h4a1 1 0 011 1v1" />
+      <path d="M9 13l2 2 4-4" />
+    </>
+  ),
+  "reference-letter": I(
+    <>
+      <path d="M7 3h7l4 4v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" />
+      <path d="M14 3v4h4" />
+      <path d="M11.5 11l.85 1.7 1.9.25-1.4 1.35.35 1.9-1.7-.9-1.7.9.35-1.9L8.75 13l1.9-.25z" />
     </>
   ),
 };

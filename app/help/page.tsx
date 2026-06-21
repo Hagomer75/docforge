@@ -31,6 +31,10 @@ const IC = {
   shield: I(<><path d="M12 3l8 3v6c0 5-3.4 7.7-8 9-4.6-1.3-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" /></>),
   qr: I(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3M21 14v.01M14 21h.01M21 21v.01M18 18h.01M21 18h.01M18 21h.01" /></>),
   eye: I(<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></>),
+  calendar: I(<><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 9h18M8 3v4M16 3v4" /><path d="M8.5 15l2 2 4-4" /></>),
+  door: I(<><rect x="4" y="3" width="9" height="18" rx="1" /><circle cx="10" cy="12" r="1" /><path d="M15 12h6M18 9l3 3-3 3" /></>),
+  clipboard: I(<><rect x="6" y="4" width="12" height="17" rx="2" /><path d="M9 4V3a1 1 0 011-1h4a1 1 0 011 1v1" /><path d="M9 13l2 2 4-4" /></>),
+  refstar: I(<><path d="M7 3h7l4 4v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" /><path d="M14 3v4h4" /><path d="M11.5 11l.85 1.7 1.9.25-1.4 1.35.35 1.9-1.7-.9-1.7.9.35-1.9L8.75 13l1.9-.25z" /></>),
 };
 
 const STEPS = [
@@ -39,37 +43,17 @@ const STEPS = [
   { ic: IC.bolt, t: "Generate", d: "Click generate. Every row becomes a PDF, bundled into one ZIP — one document per student." },
 ];
 
-const GROUPS = [
-  {
-    name: "Certificates", items: [
-      { ic: IC.cert, t: "Classic certificate", d: "Award certificate, A4 landscape" },
-    ],
-  },
-  {
-    name: "Reports", items: [
-      { ic: IC.report, t: "Progress report", d: "Per-subject marks + teacher comment" },
-    ],
-  },
-  {
-    name: "Finance", items: [
-      { ic: IC.receipt, t: "Fee receipt", d: "Payment receipt with paid / balance" },
-    ],
-  },
-  {
-    name: "Cards", items: [
-      { ic: IC.id, t: "Student ID card", d: "Photo + scannable QR, CR80" },
-      { ic: IC.book, t: "Library card", d: "Photo + QR member card" },
-      { ic: IC.pass, t: "Hall pass", d: "Corridor pass, landscape" },
-    ],
-  },
-  {
-    name: "Letters", items: [
-      { ic: IC.letter, t: "Attendance letter", d: "Attendance notice home" },
-      { ic: IC.badge, t: "Enrollment confirmation", d: "Admission confirmation" },
-      { ic: IC.letter, t: "Permission slip", d: "Consent letter, parent signature" },
-      { ic: IC.letter, t: "Reference letter", d: "Recommendation letter" },
-    ],
-  },
+const TEMPLATES = [
+  { g: "Certificates", ic: IC.cert, t: "Classic certificate", d: "Award certificate, A4 landscape" },
+  { g: "Reports", ic: IC.report, t: "Progress report", d: "Per-subject marks + comment" },
+  { g: "Finance", ic: IC.receipt, t: "Fee receipt", d: "Paid / balance receipt" },
+  { g: "Cards", ic: IC.id, t: "Student ID card", d: "Photo + scannable QR" },
+  { g: "Cards", ic: IC.book, t: "Library card", d: "Photo + QR member card" },
+  { g: "Cards", ic: IC.door, t: "Hall pass", d: "Corridor pass, landscape" },
+  { g: "Letters", ic: IC.calendar, t: "Attendance letter", d: "Attendance notice home" },
+  { g: "Letters", ic: IC.badge, t: "Enrollment confirmation", d: "Admission confirmation" },
+  { g: "Letters", ic: IC.clipboard, t: "Permission slip", d: "Consent + parent signature" },
+  { g: "Letters", ic: IC.refstar, t: "Reference letter", d: "Recommendation letter" },
 ];
 
 const FEATURES = [
@@ -188,23 +172,19 @@ export default function HelpPage() {
       {/* templates */}
       <section id="templates" className="ig-sec">
         <h2 className="ig-h2">Ten ready-made templates</h2>
-        <p className="ig-sub">Grouped by what you need.</p>
-        {GROUPS.map((g) => (
-          <div className="ig-group" key={g.name}>
-            <div className="ig-group-h">{g.name}</div>
-            <div className="ig-tiles">
-              {g.items.map((t) => (
-                <div className="ig-tile" key={t.t}>
-                  <div className="ig-tile-ic">{t.ic}</div>
-                  <div>
-                    <h4>{t.t}</h4>
-                    <p>{t.d}</p>
-                  </div>
-                </div>
-              ))}
+        <p className="ig-sub">One document type per tile.</p>
+        <div className="ig-tiles">
+          {TEMPLATES.map((t) => (
+            <div className="ig-tile" key={t.t}>
+              <div className="ig-tile-ic">{t.ic}</div>
+              <div className="ig-tile-tx">
+                <span className="ig-tile-g">{t.g}</span>
+                <h4>{t.t}</h4>
+                <p>{t.d}</p>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </section>
 
       {/* features */}
