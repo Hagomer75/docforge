@@ -105,6 +105,11 @@ export const UI: Record<Lang, Dict> = {
     photoMatched: "{n} of {total} students matched",
     photoNeedMatch: "Map the {id} field first so photos can be matched by filename.",
     photoNone: "Those weren't images. Use PNG or JPG files.",
+    photoTooBig: "Image is too large. Use a file under 2 MB.",
+    rowPhotoAdd: "Add photo",
+    rowPhotoChange: "Change photo",
+    rowPhotoClear: "Remove photo",
+    photosOr: "Or step through students below and add a photo to each one directly.",
   },
   ar: {
     tagline: "مستندات بالجملة",
@@ -197,6 +202,11 @@ export const UI: Record<Lang, Dict> = {
     photoMatched: "تمت مطابقة {n} من {total} طالب",
     photoNeedMatch: "اربط حقل {id} أولاً ليتم مطابقة الصور حسب اسم الملف.",
     photoNone: "هذه ليست صوراً. استخدم ملفات PNG أو JPG.",
+    photoTooBig: "الصورة كبيرة جداً. استخدم ملفاً أقل من 2 ميجابايت.",
+    rowPhotoAdd: "إضافة صورة",
+    rowPhotoChange: "تغيير الصورة",
+    rowPhotoClear: "إزالة الصورة",
+    photosOr: "أو تنقّل بين الطلاب أدناه وأضف صورة لكل واحد مباشرة.",
   },
 };
 

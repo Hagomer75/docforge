@@ -180,6 +180,7 @@ export default function Home() {
   const [cardsPerPage, setCardsPerPage] = useState<1 | 2 | 4 | 10>(1);
   const [cutGuides, setCutGuides] = useState(true);
   const [photoMap, setPhotoMap] = useState<Record<string, string>>({});
+  const [rowPhotos, setRowPhotos] = useState<Record<number, string>>({});
   const [photoErr, setPhotoErr] = useState("");
   const [labelOverrides, setLabelOverrides] = useState<{
     en: Record<string, string>;
@@ -191,6 +192,7 @@ export default function Home() {
   const logoInput = useRef<HTMLInputElement>(null);
   const sigInput = useRef<HTMLInputElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
+  const rowPhotoInput = useRef<HTMLInputElement>(null);
   const { t, lang } = useI18n();
 
   // Localised labels for server-driven template/field data.
@@ -288,7 +290,7 @@ export default function Home() {
             mapping: effMapping(),
             subjectColumns: subjectCols,
             branding: brandingPayload(branding),
-            row: withPhotos([upload.rows[idx]])[0],
+            row: withPhotos([upload.rows[idx]], idx)[0],
             lang,
             labels: labelOverrides[lang],
           }),
@@ -300,7 +302,7 @@ export default function Home() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex, lang, labelOverrides, photoMap]);
+  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex, lang, labelOverrides, photoMap, rowPhotos]);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -347,6 +349,7 @@ export default function Home() {
     setPreviewIndex(0);
     setCardsPerPage(1); // reset sheet mode when switching templates
     setPhotoMap({}); // photos are matched per template's ID field
+    setRowPhotos({});
     setOpen(2); // picking a template collapses panel 1 and opens upload & map
   }
 
@@ -394,7 +397,7 @@ export default function Home() {
       subjectColumns: subjectCols,
       branding: brandingPayload(branding),
       filenamePattern,
-      rows: withPhotos(rows),
+      rows: withPhotos(rows, startIndex),
       startIndex,
       lang,
       cardsPerPage,
@@ -527,20 +530,46 @@ export default function Home() {
     return n;
   }, [upload, photoMatchCol, photoMap]);
 
+  const hasAnyPhoto = Object.keys(photoMap).length > 0 || Object.keys(rowPhotos).length > 0;
   function effMapping(): Record<string, string> {
-    if (selected?.photoField && Object.keys(photoMap).length && !mapping[selected.photoField]) {
+    if (selected?.photoField && hasAnyPhoto && !mapping[selected.photoField]) {
       return { ...mapping, [selected.photoField]: PHOTO_COL };
     }
     return mapping;
   }
-  function withPhotos(rows: Record<string, string>[]): Record<string, string>[] {
-    if (!selected?.photoField || !Object.keys(photoMap).length || !photoMatchCol) return rows;
+  // Inject each row's photo into the column the renderer reads. A per-student
+  // photo (rowPhotos, keyed by absolute index) wins over a filename match.
+  function withPhotos(
+    rows: Record<string, string>[],
+    baseIndex = 0
+  ): Record<string, string>[] {
+    if (!selected?.photoField || !hasAnyPhoto) return rows;
     const col = mapping[selected.photoField] || PHOTO_COL;
-    return rows.map((r) => {
-      const k = String(r[photoMatchCol] ?? "").trim().toLowerCase();
-      const data = photoMap[k];
+    return rows.map((r, i) => {
+      const direct = rowPhotos[baseIndex + i];
+      const byName = photoMatchCol
+        ? photoMap[String(r[photoMatchCol] ?? "").trim().toLowerCase()]
+        : undefined;
+      const data = direct || byName;
       return data ? { ...r, [col]: data } : r;
     });
+  }
+  // Attach one image to the student currently shown in the preview.
+  function handleRowPhoto(file: File | undefined) {
+    setPhotoErr("");
+    if (!file) return;
+    if (!/\.(png|jpe?g)$/i.test(file.name)) {
+      setPhotoErr(t("photoNone"));
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setPhotoErr(t("photoTooBig"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () =>
+      setRowPhotos((m) => ({ ...m, [previewIndex]: reader.result as string }));
+    reader.readAsDataURL(file);
   }
   function handlePhotos(files: FileList) {
     setPhotoErr("");
@@ -941,9 +970,14 @@ export default function Home() {
                 <div className="section">
                   <div className="section-h">{t("photosTitle")}</div>
                   {!photoMatchCol ? (
-                    <p className="hint" style={{ marginTop: 0 }}>
-                      {fmt(t("photoNeedMatch"), { id: photoFieldLabel })}
-                    </p>
+                    <>
+                      <p className="hint" style={{ marginTop: 0 }}>
+                        {fmt(t("photoNeedMatch"), { id: photoFieldLabel })}
+                      </p>
+                      <p className="hint" style={{ marginTop: 4 }}>
+                        {t("photosOr")}
+                      </p>
+                    </>
                   ) : (
                     <>
                       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -975,6 +1009,9 @@ export default function Home() {
                       {photoErr && <div className="msg err">{photoErr}</div>}
                       <p className="hint" style={{ marginTop: 8 }}>
                         {fmt(t("photosHint"), { id: photoFieldLabel })}
+                      </p>
+                      <p className="hint" style={{ marginTop: 4 }}>
+                        {t("photosOr")}
                       </p>
                     </>
                   )}
@@ -1053,6 +1090,40 @@ export default function Home() {
                     </>
                   )}
                   <div className="pvactions">
+                    {selected.photoField && (
+                      <>
+                        <button
+                          className={"btn ghost small" + (rowPhotos[previewIndex] ? " on" : "")}
+                          onClick={() => rowPhotoInput.current?.click()}
+                        >
+                          {rowPhotos[previewIndex] ? t("rowPhotoChange") : t("rowPhotoAdd")}
+                        </button>
+                        {rowPhotos[previewIndex] && (
+                          <button
+                            className="btn ghost small"
+                            onClick={() =>
+                              setRowPhotos((m) => {
+                                const n = { ...m };
+                                delete n[previewIndex];
+                                return n;
+                              })
+                            }
+                          >
+                            {t("rowPhotoClear")}
+                          </button>
+                        )}
+                        <input
+                          ref={rowPhotoInput}
+                          type="file"
+                          accept="image/png,image/jpeg"
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            handleRowPhoto(e.target.files?.[0]);
+                            e.target.value = "";
+                          }}
+                        />
+                      </>
+                    )}
                     <button
                       className={"btn ghost small" + (editing ? " on" : "")}
                       onClick={() => setEditing((e) => !e)}
