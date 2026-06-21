@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n, LangToggle } from "./i18n";
-import { FIELD_I18N, GROUP_I18N, TEMPLATE_I18N } from "@/lib/i18n";
+import { FIELD_I18N, GROUP_I18N, TEMPLATE_I18N, fmt } from "@/lib/i18n";
 import type { DocFont } from "@/lib/templates";
 import { EDITABLE_LABELS, docLabels } from "@/lib/doclabels";
 
@@ -174,6 +174,7 @@ export default function Home() {
   const [dragOver, setDragOver] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
   const [singleBusy, setSingleBusy] = useState(false);
+  const [sampleBusy, setSampleBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [cardsPerPage, setCardsPerPage] = useState<1 | 2 | 4 | 10>(1);
   const [cutGuides, setCutGuides] = useState(true);
@@ -254,6 +255,18 @@ export default function Home() {
     return { blanks, dups };
   }, [selected, upload, mapping, nameKey]);
 
+  // Template fields that have no column to map to (structural gap, not row data).
+  const unmapped = useMemo(() => {
+    const required: Field[] = [];
+    const optional: Field[] = [];
+    if (selected && upload) {
+      for (const f of selected.fields) {
+        if (!mapping[f.key]) (f.required ? required : optional).push(f);
+      }
+    }
+    return { required, optional };
+  }, [selected, upload, mapping]);
+
   // Live preview of the current record, debounced.
   useEffect(() => {
     if (!selected || !upload || !nameMapped) {
@@ -307,6 +320,20 @@ export default function Home() {
     },
     [selected]
   );
+
+  // One-click: load the bundled sample through the same upload path.
+  async function loadSample() {
+    if (sampleBusy) return;
+    setSampleBusy(true);
+    try {
+      const txt = await (await fetch("/sample-class.csv")).text();
+      await handleFile(new File([txt], "sample-class.csv", { type: "text/csv" }));
+    } catch {
+      setUploadErr(t("cantRead"));
+    } finally {
+      setSampleBusy(false);
+    }
+  }
 
   function chooseTemplate(t: Template) {
     setSelected(t);
@@ -579,6 +606,17 @@ export default function Home() {
                 />
               </div>
 
+              {!upload && (
+                <button
+                  className="btn"
+                  style={{ width: "100%", marginTop: 8 }}
+                  disabled={sampleBusy}
+                  onClick={loadSample}
+                >
+                  {sampleBusy ? t("trySampleLoading") : t("trySample")}
+                </button>
+              )}
+
               {upload && (
                 <div style={{ marginTop: 6 }}>
                   {selected.fields.map((f) => (
@@ -600,6 +638,27 @@ export default function Home() {
                       </select>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {upload && (unmapped.required.length > 0 || unmapped.optional.length > 0) && (
+                <div className="nudge">
+                  <div className="nudge-h">{t("nudgeTitle")}</div>
+                  {unmapped.required.length > 0 && (
+                    <div className="nudge-req">
+                      {fmt(t("nudgeRequired"), {
+                        fields: unmapped.required.map((f) => tf(f)).join(lang === "ar" ? "، " : ", "),
+                      })}
+                    </div>
+                  )}
+                  {unmapped.optional.length > 0 && (
+                    <div className="nudge-opt">
+                      {fmt(t("nudgeOptional"), {
+                        fields: unmapped.optional.map((f) => tf(f)).join(lang === "ar" ? "، " : ", "),
+                      })}
+                    </div>
+                  )}
+                  <div className="nudge-hint">{t("nudgeHint")}</div>
                 </div>
               )}
 
@@ -760,6 +819,9 @@ export default function Home() {
                       ))}
                     </div>
                   </div>
+                  <p className="hint" style={{ marginTop: 0 }}>
+                    {t("fontHint")}
+                  </p>
                   {selected.slug === "certificate-classic" && (
                     <div className="maprow">
                       <label>{t("headerPos")}</label>
@@ -783,6 +845,9 @@ export default function Home() {
               {upload && isCard && (
                 <div className="section">
                   <div className="section-h">{t("cardsPerPage")}</div>
+                  <p className="hint" style={{ marginTop: 0, marginBottom: 8 }}>
+                    {t("cardsHint")}
+                  </p>
                   <div className="seg" style={{ maxWidth: 280 }}>
                     {perPageOptions.map((n) => (
                       <button
@@ -847,7 +912,11 @@ export default function Home() {
                   {t("noFile")}{" "}
                   <a href="/sample-class.csv" download>
                     {t("sampleList")}
-                  </a>
+                  </a>{" "}
+                  {t("orTry")}{" "}
+                  <button className="link" disabled={sampleBusy} onClick={loadSample}>
+                    {sampleBusy ? t("trySampleLoading") : t("trySample")}
+                  </button>
                   .
                 </div>
               )}

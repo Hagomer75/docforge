@@ -295,6 +295,11 @@ html { scroll-behavior: smooth; }
 .link { background: none; border: none; color: var(--edu); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; text-transform: none; letter-spacing: 0; }
 .link:hover { text-decoration: underline; }
 .warn { margin-top: 14px; padding: 10px 12px; border: 1px solid #E6D2A8; background: #FBF3DF; border-radius: 8px; font-size: 12.5px; color: #8A6A1E; display: grid; gap: 4px; }
+.nudge { margin-top: 14px; padding: 10px 12px; border: 1px solid #BBD3E8; background: #EEF5FB; border-radius: 8px; font-size: 12.5px; color: #2C4A66; display: grid; gap: 4px; }
+.nudge-h { font-weight: 600; }
+.nudge-req { color: #1C4E80; }
+.nudge-opt { color: #5C7185; }
+.nudge-hint { font-size: 11.5px; color: #6B7785; }
 .token { background: var(--edu-soft); border: none; color: var(--edu-d); font-family: ui-monospace, monospace; font-size: 11.5px; border-radius: 5px; padding: 2px 7px; margin: 0 4px 4px 0; cursor: pointer; }
 .token:hover { background: var(--edu); color: #fff; }
 .pvbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
