@@ -139,6 +139,24 @@
 .statNum { font-family: "Fraunces", serif; font-weight: 700; font-size: 22px; color: var(--edu); }
 .statLbl { font-size: 13px; color: var(--muted); }
 
+/* ---------- showcase gallery ---------- */
+.shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 30px; }
+.shot {
+  background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+  box-shadow: 0 26px 54px -38px rgba(28, 42, 57, .5); transition: transform .16s, box-shadow .16s;
+}
+.shot:hover { transform: translateY(-5px); box-shadow: 0 34px 66px -34px rgba(28, 42, 57, .55); }
+.shotImg {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 9px; height: 230px;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.shotImg img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.shotCap { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.shotCap b { font-family: "Fraunces", serif; font-weight: 600; font-size: 15px; }
+.shotTag { font-size: 11px; font-weight: 600; color: var(--edu-d); background: var(--edu-soft); border-radius: 20px; padding: 3px 10px; }
+@media (max-width: 860px) { .shots { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .shots { grid-template-columns: 1fr; } }
+
 /* ---------- steps ---------- */
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 30px; }
 .step { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px; }

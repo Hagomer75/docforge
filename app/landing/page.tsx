@@ -38,6 +38,15 @@ const IC = {
   type: I(<><path d="M5 19L10 5l5 14" /><path d="M7.2 14h5.6" /></>),
 };
 
+const SHOTS = [
+  { img: "certificate", t: "Award certificate", tag: "EN" },
+  { img: "report", t: "Progress report", tag: "EN" },
+  { img: "idcard", t: "Student ID card", tag: "EN" },
+  { img: "receipt", t: "Fee receipt", tag: "EN" },
+  { img: "permission", t: "Permission slip", tag: "EN" },
+  { img: "certificate_ar", t: "Certificate", tag: "عربي" },
+];
+
 const STEPS = [
   { ic: IC.pick, t: "Choose a template", d: "Certificate, report card, fee receipt, ID card, hall pass or letter — 10 in all." },
   { ic: IC.upload, t: "Upload & map", d: "Drop a CSV or Excel class list. DocForge auto-matches your columns; tweak with a click." },
@@ -145,6 +154,31 @@ export default function Landing() {
             <div className={`${s.stat} ${s.reveal}`}><span className={s.statNum}>2</span><span className={s.statLbl}>languages · EN + AR</span></div>
             <div className={`${s.stat} ${s.reveal}`}><span className={s.statNum}>100s</span><span className={s.statLbl}>students per run</span></div>
             <div className={`${s.stat} ${s.reveal}`}><span className={s.statNum}>0</span><span className={s.statLbl}>logins or installs</span></div>
+          </div>
+        </div>
+      </section>
+
+      {/* showcase */}
+      <section className={s.section}>
+        <div className={s.wrap}>
+          <div className={`${s.center} ${s.reveal}`}>
+            <span className={s.kicker}>Examples</span>
+            <h2 className={s.h2}>Real documents, made in seconds</h2>
+            <p className={s.lead}>Every one below came straight out of DocForge — branded, print-ready, in English or Arabic.</p>
+          </div>
+          <div className={s.shots}>
+            {SHOTS.map((sh, i) => (
+              <div className={`${s.shot} ${s.reveal}`} key={i}>
+                <div className={s.shotImg}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/samples/${sh.img}.png`} alt={`${sh.t} made with DocForge`} loading="lazy" />
+                </div>
+                <div className={s.shotCap}>
+                  <b>{sh.t}</b>
+                  <span className={s.shotTag}>{sh.tag}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
