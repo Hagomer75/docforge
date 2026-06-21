@@ -331,6 +331,9 @@ export default function Home() {
           Doc<span>Forge</span>
         </div>
         <span className="tag">Batch documents</span>
+        <a className="help-link" href="/help">
+          Help &amp; how-to
+        </a>
       </header>
 
       <div className="stepper">
