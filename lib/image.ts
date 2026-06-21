@@ -30,6 +30,13 @@ export async function fetchImageDataUrl(rawUrl: string): Promise<string | undefi
   const url = (rawUrl ?? "").trim();
   if (!url) return undefined;
 
+  // Accept an inline data URL directly (user pastes a base64 PNG/JPEG photo).
+  const dm = /^data:image\/(png|jpe?g);base64,([a-z0-9+/=]+)$/i.exec(url);
+  if (dm) {
+    const bytes = Buffer.from(dm[2], "base64");
+    return bytes.length > 0 && bytes.length <= MAX_BYTES ? url : undefined;
+  }
+
   let u: URL;
   try {
     u = new URL(url);
