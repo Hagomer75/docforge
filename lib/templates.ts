@@ -199,6 +199,7 @@ export type RenderOpts = {
   lang?: "en" | "ar"; // document language (drives labels + Arabic shaping)
   cardsPerPage?: 1 | 2 | 4 | 10; // card-sheet tiling (cards only)
   cutGuides?: boolean; // draw corner cut marks on card sheets
+  labels?: Record<string, string>; // user overrides for printed wording
 };
 
 // Map each font style to display/body CSS families for the HTML preview.
@@ -309,7 +310,7 @@ function bhead(title: string, edu: string, opts: RenderOpts, metaHtml: string): 
 }
 
 function signBlock(label: string, value: string, opts: RenderOpts, edu: string): string {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   return `<div class="sign">
   <span class="blk">${sigTag(opts.branding, 38)}<b>${esc(value) || "&nbsp;"}</b>${esc(label)}</span>
   <span class="blk"><b style="border-color:${edu}">&nbsp;</b>${esc(D.officialStamp)}</span>
@@ -325,7 +326,7 @@ function certificateHTML(v: FieldValues, opts: RenderOpts): string {
   const pos = opts.branding?.logoPos ?? "center";
   const justify = pos === "left" ? "flex-start" : pos === "right" ? "flex-end" : "center";
   const hasHeader = !!(logo || school);
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8"><style>
 ${FONTS}
 ${arFont(opts)}
@@ -366,7 +367,7 @@ body{font-family:var(--f-body);color:${DEFAULTS.ink};background:#fff;display:fle
 
 function progressReportHTML(v: FieldValues, opts: RenderOpts): string {
   const edu = accentOf(opts.branding);
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const subjects = opts.subjects ?? [];
   const rowsHtml =
     subjects.length === 0
@@ -404,7 +405,7 @@ ${bhead(D.prTitle, edu, opts, `${esc(v.term) || ""}<br>${esc(v.date) || ""}`)}
 
 function feeReceiptHTML(v: FieldValues, opts: RenderOpts): string {
   const edu = accentOf(opts.branding);
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8">${docHead(edu, opts)}<style>
 .rmeta{display:flex;gap:30px;margin:18px 0;font-size:13px}
 .rmeta .lbl{color:${DEFAULTS.muted};font-size:11px;text-transform:uppercase;letter-spacing:.08em}
@@ -447,7 +448,7 @@ function cardHTML(
   opts: RenderOpts
 ): string {
   const edu = accentOf(opts.branding);
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const school = opts.branding?.schoolName?.trim();
   const qr = opts.qrDataUrl
     ? `<img src="${opts.qrDataUrl}" style="width:78px;height:78px" alt="qr">`
@@ -503,7 +504,7 @@ body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;j
 }
 
 function idCardHTML(v: FieldValues, opts: RenderOpts): string {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   return cardHTML(
     D.idTag, D.idRole,
     [{ k: D.klass, v: v.class_name }, { k: D.validUntil, v: v.valid_until }],
@@ -512,7 +513,7 @@ function idCardHTML(v: FieldValues, opts: RenderOpts): string {
 }
 
 function libraryCardHTML(v: FieldValues, opts: RenderOpts): string {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   return cardHTML(
     D.libTag, D.libRole,
     [{ k: D.klass, v: v.class_name }, { k: D.expires, v: v.expiry }],
@@ -522,7 +523,7 @@ function libraryCardHTML(v: FieldValues, opts: RenderOpts): string {
 
 function hallPassHTML(v: FieldValues, opts: RenderOpts): string {
   const edu = accentOf(opts.branding);
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const school = opts.branding?.schoolName?.trim();
   return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8"><style>
 ${FONTS}
@@ -587,7 +588,7 @@ ${signBlock(signLabel, signValue, opts, edu)}
 }
 
 function attendanceLetterHTML(v: FieldValues, opts: RenderOpts): string {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const greet = v.guardian ? esc(D.dearName(v.guardian)) : esc(D.dearGuardian);
   const msg = esc(v.message) || esc(D.attMsg(v.student_name || D.theStudent));
   const body = `<p class="greet">${greet}</p>
@@ -604,7 +605,7 @@ function attendanceLetterHTML(v: FieldValues, opts: RenderOpts): string {
 }
 
 function enrollmentLetterHTML(v: FieldValues, opts: RenderOpts): string {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const status = esc(v.status) || esc(D.confirmedDefault);
   const body = `<p class="greet">${esc(D.toWhom)}</p>
   <p>${esc(D.enrBody(v.student_name || D.theStudent, status, v.academic_year || "—"))}</p>
@@ -620,7 +621,7 @@ function enrollmentLetterHTML(v: FieldValues, opts: RenderOpts): string {
 }
 
 function permissionSlipHTML(v: FieldValues, opts: RenderOpts): string {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const greet = v.guardian ? esc(D.dearName(v.guardian)) : esc(D.dearGuardian);
   const body = `<p class="greet">${greet}</p>
   <p>${esc(D.permBody(v.student_name || D.theStudent, v.event || D.activityDefault))}</p>
@@ -635,7 +636,7 @@ function permissionSlipHTML(v: FieldValues, opts: RenderOpts): string {
 }
 
 function referenceLetterHTML(v: FieldValues, opts: RenderOpts): string {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const who = v.role
     ? `${v.student_name || D.theStudent}, ${v.role}`
     : `${v.student_name || D.theStudent}`;

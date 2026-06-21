@@ -303,6 +303,7 @@ html { scroll-behavior: smooth; }
 .pvcount { font-size: 13px; color: var(--muted); }
 .pvactions { margin-inline-start: auto; display: flex; gap: 8px; }
 .btn.ghost.small.on { background: var(--edu); color: #fff; border-color: var(--edu); }
+.maprow label.wlabel { color: var(--muted); font-size: 12px; line-height: 1.3; }
 .editbox { margin-top: 14px; border: 1px solid var(--line); border-radius: 11px; padding: 14px 16px; background: var(--surface); }
 .editbox .section-h { margin-bottom: 10px; }
 

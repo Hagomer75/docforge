@@ -95,7 +95,28 @@ export type DocLabels = Record<keyof typeof S, string> & {
   refBody: (who: string) => string;
 };
 
-export function docLabels(lang: Lang): DocLabels {
+// Which fixed labels each template exposes for user editing (the headline text
+// + key captions). Keys are scalar entries of S above.
+export type LabelKey = keyof typeof S;
+export const EDITABLE_LABELS: Record<string, LabelKey[]> = {
+  "certificate-classic": ["certKicker", "presentedTo", "teacher", "date", "school"],
+  "progress-report": ["prTitle", "student", "klass", "subject", "mark", "teacherComment"],
+  "fee-receipt": ["frTitle", "receivedFrom", "method", "description", "total", "paid", "balance", "paidPill", "receivedBy"],
+  "student-id-card": ["idTag", "idRole", "validUntil"],
+  "library-card": ["libTag", "libRole", "expires"],
+  "hall-pass": ["corridorPass", "hallPass", "permissionFor", "destination", "timeOut", "issuedBy"],
+  "attendance-letter": ["attTitle", "attClose", "attendance", "daysAbsent", "period", "schoolAdmin"],
+  "enrollment-confirmation": ["enrTitle", "toWhom", "enrClose", "academicYear", "admissionNo", "statusLbl", "authSignatory"],
+  "permission-slip": ["permTitle", "permClose", "activity", "location", "cost", "parentSig"],
+  "reference-letter": ["refTitle", "refClose", "authSignatory"],
+};
+
+export function isEditableLabel(k: string): k is LabelKey {
+  return k in S;
+}
+
+// overrides: { labelKey: customText } — replaces the default for non-empty values.
+export function docLabels(lang: Lang, overrides?: Record<string, string>): DocLabels {
   const out = {} as DocLabels;
   (Object.keys(S) as (keyof typeof S)[]).forEach((k) => {
     (out as Record<string, string | ((...a: string[]) => string)>)[k] = (S[k] as B)[lang];
@@ -120,6 +141,14 @@ export function docLabels(lang: Lang): DocLabels {
       `Your child ${n} has been invited to take part in ${event}. We are seeking your permission for them to attend.`;
     out.refBody = (who) =>
       `I am pleased to provide this reference for ${who}. Throughout the time I have known them, they have consistently demonstrated strong character, reliability, and ability. I recommend them without reservation.`;
+  }
+  // Apply user wording overrides (scalar labels only).
+  if (overrides) {
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v && v.trim() && isEditableLabel(k)) {
+        (out as Record<string, string | ((...a: string[]) => string)>)[k] = v;
+      }
+    }
   }
   return out;
 }

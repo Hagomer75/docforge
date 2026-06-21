@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n, LangToggle } from "./i18n";
 import { FIELD_I18N, GROUP_I18N, TEMPLATE_I18N } from "@/lib/i18n";
 import type { DocFont } from "@/lib/templates";
+import { EDITABLE_LABELS, docLabels } from "@/lib/doclabels";
 
 const FONTS: DocFont[] = ["classic", "modern", "typewriter"];
 const CARD_SLUGS = new Set(["student-id-card", "library-card", "hall-pass"]);
@@ -176,6 +177,10 @@ export default function Home() {
   const [editing, setEditing] = useState(false);
   const [cardsPerPage, setCardsPerPage] = useState<1 | 2 | 4 | 10>(1);
   const [cutGuides, setCutGuides] = useState(true);
+  const [labelOverrides, setLabelOverrides] = useState<{
+    en: Record<string, string>;
+    ar: Record<string, string>;
+  }>({ en: {}, ar: {} });
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
   const [genMsg, setGenMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -202,7 +207,26 @@ export default function Home() {
     } catch {
       /* ignore */
     }
+    // Restore saved wording overrides.
+    try {
+      const raw = localStorage.getItem("docforge:labels");
+      if (raw) {
+        const p = JSON.parse(raw);
+        setLabelOverrides({ en: p.en ?? {}, ar: p.ar ?? {} });
+      }
+    } catch {
+      /* ignore */
+    }
   }, []);
+
+  // Persist wording overrides as they change.
+  useEffect(() => {
+    try {
+      localStorage.setItem("docforge:labels", JSON.stringify(labelOverrides));
+    } catch {
+      /* ignore */
+    }
+  }, [labelOverrides]);
 
   const nameKey = selected?.fields.find((f) => f.required)?.key ?? selected?.fields[0]?.key;
   const requiredReady =
@@ -249,6 +273,7 @@ export default function Home() {
             branding: brandingPayload(branding),
             row: upload.rows[idx],
             lang,
+            labels: labelOverrides[lang],
           }),
         });
         const { html } = await r.json();
@@ -258,7 +283,7 @@ export default function Home() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex, lang]);
+  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex, lang, labelOverrides]);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -342,7 +367,12 @@ export default function Home() {
       lang,
       cardsPerPage,
       cutGuides,
+      labels: labelOverrides[lang],
     };
+  }
+
+  function setLabel(key: string, val: string) {
+    setLabelOverrides((o) => ({ ...o, [lang]: { ...o[lang], [key]: val } }));
   }
 
   async function downloadCurrent() {
@@ -447,6 +477,8 @@ export default function Home() {
   const isCard = !!selected && CARD_SLUGS.has(selected.slug);
   const perPageOptions: (1 | 2 | 4 | 10)[] =
     selected?.slug === "hall-pass" ? [1, 2, 4] : [1, 2, 4, 10];
+  const wordingKeys = selected ? EDITABLE_LABELS[selected.slug] ?? [] : [];
+  const labelDefaults = docLabels(lang) as unknown as Record<string, string>;
 
   // Accordion: only one panel is expanded; the others collapse to a summary
   // header. A panel is reachable only once its prerequisites are met.
@@ -775,6 +807,37 @@ export default function Home() {
                   <p className="hint" style={{ marginTop: 8 }}>
                     {t("sheetHint")}
                   </p>
+                </div>
+              )}
+
+              {upload && wordingKeys.length > 0 && (
+                <div className="section">
+                  <div className="section-h">
+                    {t("wording")}
+                    <span className="section-act">
+                      <button
+                        className="link"
+                        onClick={() => setLabelOverrides((o) => ({ ...o, [lang]: {} }))}
+                      >
+                        {t("wordingReset")}
+                      </button>
+                    </span>
+                  </div>
+                  <p className="hint" style={{ marginTop: 0 }}>
+                    {t("wordingHint")}
+                  </p>
+                  {wordingKeys.map((k) => (
+                    <div className="maprow" key={k}>
+                      <label className="wlabel">{labelDefaults[k]}</label>
+                      <input
+                        className="text"
+                        type="text"
+                        placeholder={labelDefaults[k]}
+                        value={labelOverrides[lang][k] ?? ""}
+                        onChange={(e) => setLabel(k, e.target.value)}
+                      />
+                    </div>
+                  ))}
                 </div>
               )}
 

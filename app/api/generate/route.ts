@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
       lang,
       cardsPerPage,
       cutGuides,
+      labels,
     } = await req.json();
     const template = getTemplate(templateSlug);
     if (!template) {
@@ -107,6 +108,7 @@ export async function POST(req: NextRequest) {
         lang: docLang,
         cardsPerPage,
         cutGuides,
+        labels,
       });
       return NextResponse.json({
         sheet: true,
@@ -127,6 +129,7 @@ export async function POST(req: NextRequest) {
         qrDataUrl: qr,
         photoDataUrl: photos[i],
         lang: lang === "ar" ? "ar" : "en",
+        labels,
       });
       const base = applyPattern(
         filenamePattern,

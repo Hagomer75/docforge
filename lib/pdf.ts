@@ -171,7 +171,7 @@ async function drawSignatureRow(
 ): Promise<void> {
   const { width } = page.getSize();
   const { sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const M = 48;
   const right = width - M;
   const sy = 96;
@@ -196,7 +196,7 @@ async function certificatePDF(
   const { width, height } = page.getSize();
   const edu = accentColor(opts.branding);
   const { serifB, serifI, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const mid = width / 2;
 
   page.drawRectangle({
@@ -271,7 +271,7 @@ async function progressReportPDF(
   const { width, height } = page.getSize();
   const edu = accentColor(opts.branding);
   const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const M = 48;
   const right = width - M;
 
@@ -355,7 +355,7 @@ async function feeReceiptPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts)
   const { width } = page.getSize();
   const edu = accentColor(opts.branding);
   const { sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const M = 48;
   const right = width - M;
 
@@ -430,7 +430,7 @@ async function cardPDF(
   patchDraw(page);
   const edu = accentColor(opts.branding);
   const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const white = rgb(1, 1, 1);
 
   // top colour bar: school name + tag
@@ -484,7 +484,7 @@ async function cardPDF(
 }
 
 async function idCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   await cardPDF(doc, {
     tag: D.idTag, role: D.idRole, name: v.full_name,
     rows: [{ k: D.klass, v: v.class_name }, { k: D.validUntil, v: v.valid_until }],
@@ -493,7 +493,7 @@ async function idCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Pr
 }
 
 async function libraryCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   await cardPDF(doc, {
     tag: D.libTag, role: D.libRole, name: v.full_name,
     rows: [{ k: D.klass, v: v.class_name }, { k: D.expires, v: v.expiry }],
@@ -507,7 +507,7 @@ async function hallPassPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): 
   patchDraw(page);
   const edu = accentColor(opts.branding);
   const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
 
   page.drawRectangle({ x: 0, y: 0, width: 10, height: H, color: edu });
   const M = 28;
@@ -604,7 +604,7 @@ async function letterPDF(
 }
 
 async function attendanceLetterPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const greeting = v.guardian ? D.dearName(v.guardian) : D.dearGuardian;
   const msg = v.message || D.attMsg(v.student_name || D.theStudent);
   await letterPDF(
@@ -622,7 +622,7 @@ async function attendanceLetterPDF(doc: PDFDocument, v: FieldValues, opts: Rende
 }
 
 async function enrollmentLetterPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const status = v.status || D.confirmedDefault;
   await letterPDF(
     doc, opts, D.enrTitle, D.toWhom,
@@ -639,7 +639,7 @@ async function enrollmentLetterPDF(doc: PDFDocument, v: FieldValues, opts: Rende
 }
 
 async function permissionSlipPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const greeting = v.guardian ? D.dearName(v.guardian) : D.dearGuardian;
   await letterPDF(
     doc, opts, D.permTitle, greeting,
@@ -655,7 +655,7 @@ async function permissionSlipPDF(doc: PDFDocument, v: FieldValues, opts: RenderO
 }
 
 async function referenceLetterPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
-  const D = docLabels(opts.lang ?? "en");
+  const D = docLabels(opts.lang ?? "en", opts.labels);
   const who = v.role ? `${v.student_name || D.theStudent}, ${v.role}` : v.student_name || D.theStudent;
   await letterPDF(
     doc, opts, D.refTitle, D.toWhom,

@@ -86,6 +86,9 @@ export const UI: Record<Lang, Dict> = {
     sheetSummary: "Sheet: {n} per A4 page · one combined PDF.",
     sheetDone: "Done. Print sheet downloaded as a single PDF.",
     sheetCap: "Sheet mode handles up to 100 records. Split the list or use single cards.",
+    wording: "Wording (optional)",
+    wordingHint: "Change the fixed text printed on the document. Leave blank to keep the default.",
+    wordingReset: "Reset",
   },
   ar: {
     tagline: "مستندات بالجملة",
@@ -159,6 +162,9 @@ export const UI: Record<Lang, Dict> = {
     sheetSummary: "ورقة: {n} لكل صفحة A4 · ملف PDF واحد مجمّع.",
     sheetDone: "تم. تم تنزيل ورقة الطباعة كملف PDF واحد.",
     sheetCap: "وضع الورقة يدعم حتى 100 سجل. قسّم القائمة أو استخدم بطاقات مفردة.",
+    wording: "الصياغة (اختياري)",
+    wordingHint: "عدّل النص الثابت المطبوع على المستند. اتركه فارغاً للنص الافتراضي.",
+    wordingReset: "إعادة تعيين",
   },
 };
 
