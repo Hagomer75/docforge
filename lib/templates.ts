@@ -451,7 +451,7 @@ function cardHTML(
   const D = docLabels(opts.lang ?? "en", opts.labels);
   const school = opts.branding?.schoolName?.trim();
   const qr = opts.qrDataUrl
-    ? `<img src="${opts.qrDataUrl}" style="width:78px;height:78px" alt="qr">`
+    ? `<img src="${opts.qrDataUrl}" style="width:64px;height:64px" alt="qr">`
     : `<div class="qrph">QR</div>`;
   const photo = opts.photoDataUrl
     ? `<img class="photo" src="${opts.photoDataUrl}" alt="photo">`
@@ -459,6 +459,9 @@ function cardHTML(
   const rowsHtml = rows
     .map((r) => `<div class="rowi"><div class="k">${esc(r.k)}</div><div class="vv">${esc(r.v) || "—"}</div></div>`)
     .join("");
+  const sigImg = opts.branding?.signatureDataUrl
+    ? `<img class="sigimg" src="${opts.branding.signatureDataUrl}" alt="">`
+    : "";
   return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8"><style>
 ${FONTS}
 ${arFont(opts)}
@@ -467,22 +470,31 @@ ${fontVars(opts)}
 html,body{height:100%}
 body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;justify-content:center;padding:24px}
 .card{width:430px;height:271px;border-radius:14px;overflow:hidden;border:1px solid ${DEFAULTS.line};box-shadow:0 18px 40px -24px rgba(28,42,57,.5);display:flex;flex-direction:column}
-.cardtop{background:${edu};color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px}
+.cardtop{background:${edu};color:#fff;padding:13px 18px;display:flex;align-items:center;gap:10px;border-bottom:3px solid rgba(255,255,255,.28)}
 .cardtop img.logo{max-height:30px;max-width:120px;object-fit:contain;filter:brightness(0) invert(1)}
 .cardtop .sn{font-family:var(--f-display);font-weight:600;font-size:15px}
-.cardtop .tag{margin-left:auto;font-size:9px;letter-spacing:.18em;text-transform:uppercase;opacity:.85}
-.cardbody{flex:1;display:flex;padding:14px 16px;gap:14px;align-items:stretch}
-.photo{width:64px;height:84px;border-radius:7px;object-fit:cover;border:1px solid ${DEFAULTS.line};flex-shrink:0;background:${DEFAULTS.paper}}
-.photo.ph{display:flex;align-items:center;justify-content:center;color:${DEFAULTS.muted};font-size:10px;border-style:dashed}
-.info{flex:1;min-width:0}
+.cardtop .tag{margin-left:auto;font-size:9px;letter-spacing:.18em;text-transform:uppercase;opacity:.9;font-weight:600}
+.cardbody{flex:1;display:flex;padding:16px 18px;gap:16px;align-items:flex-start}
+.frame{flex-shrink:0;padding:2.5px;background:${edu};border-radius:8px}
+.photo{display:block;width:66px;height:82px;border-radius:6px;object-fit:cover;background:${DEFAULTS.paper}}
+.photo.ph{display:flex;align-items:center;justify-content:center;color:${DEFAULTS.muted};font-size:10px}
+.info{flex:1;min-width:0;align-self:stretch;display:flex;flex-direction:column}
 .info .nm{font-family:var(--f-display);font-weight:600;font-size:19px;color:${DEFAULTS.ink};line-height:1.1}
-.info .role{font-size:10px;color:${DEFAULTS.muted};text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
-.info .rowi{margin-top:8px}
-.info .k{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:${DEFAULTS.muted}}
-.info .vv{font-size:13px;font-weight:600;color:${DEFAULTS.ink}}
-.qrwrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px}
-.qrph{width:78px;height:78px;border:1px dashed ${DEFAULTS.line};border-radius:8px;display:flex;align-items:center;justify-content:center;color:${DEFAULTS.muted};font-size:12px}
-.qrid{font-size:11px;font-weight:600;color:${edu};letter-spacing:.05em;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+.info .role{font-size:9.5px;color:${DEFAULTS.muted};text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 12px}
+.sig{margin-top:auto;max-width:200px}
+.sig .sigimg{display:block;max-height:26px;max-width:160px;object-fit:contain;margin-bottom:1px}
+.sig .sigline{height:1px;background:${DEFAULTS.line}}
+.sig .siglbl{font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:${DEFAULTS.muted};margin-top:3px;display:block}
+.rowi{min-width:0}
+.k{font-size:8.5px;text-transform:uppercase;letter-spacing:.1em;color:${DEFAULTS.muted}}
+.vv{font-size:13px;font-weight:600;color:${DEFAULTS.ink};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qrwrap{flex-shrink:0;display:flex;align-items:flex-start}
+.qrwrap img{width:64px;height:64px;display:block}
+.qrph{width:64px;height:64px;border:1px dashed ${DEFAULTS.line};border-radius:7px;display:flex;align-items:center;justify-content:center;color:${DEFAULTS.muted};font-size:11px}
+.cardfoot{background:${DEFAULTS.paper};border-top:1px solid ${DEFAULTS.line};padding:6px 18px 7px}
+.barcode{height:22px;width:100%;background-image:repeating-linear-gradient(90deg,${DEFAULTS.ink} 0 2px,#fff 2px 3px,${DEFAULTS.ink} 3px 6px,#fff 6px 8px,${DEFAULTS.ink} 8px 9px,#fff 9px 12px,${DEFAULTS.ink} 12px 14px,#fff 14px 15px)}
+.bcnum{margin-top:3px;text-align:center;font-size:9px;font-weight:600;letter-spacing:.32em;color:${DEFAULTS.ink};font-variant-numeric:tabular-nums}
 </style></head><body>
 <div class="card">
   <div class="cardtop">
@@ -491,13 +503,18 @@ body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;j
     <span class="tag">${esc(tag)}</span>
   </div>
   <div class="cardbody">
-    ${photo}
+    <div class="frame">${photo}</div>
     <div class="info">
       <div class="nm">${esc(name) || esc(D.studentName)}</div>
       <div class="role">${esc(role)}</div>
-      ${rowsHtml}
+      <div class="grid">${rowsHtml}</div>
+      <div class="sig">${sigImg}<div class="sigline"></div><span class="siglbl">${esc(D.signature)}</span></div>
     </div>
-    <div class="qrwrap">${qr}<div class="qrid">${esc(idValue)}</div></div>
+    <div class="qrwrap">${qr}</div>
+  </div>
+  <div class="cardfoot">
+    <div class="barcode"></div>
+    <div class="bcnum">${esc(idValue)}</div>
   </div>
 </div>
 </body></html>`;

@@ -430,6 +430,26 @@ type CardCfg = {
   idValue: string;
 };
 
+// fake-but-realistic barcode: vertical bars of varied width seeded by the id
+function drawBarcode(
+  page: ReturnType<PDFDocument["addPage"]>,
+  x: number, y: number, w: number, h: number, seed: string,
+): void {
+  const s = seed && seed.length ? seed : "00000000";
+  let cx = x;
+  let i = 0;
+  while (cx < x + w - 1) {
+    const code = s.charCodeAt(i % s.length) + i * 7;
+    const bw = 1 + (code % 3);          // bar 1-3pt
+    const gap = 1 + ((code >> 2) % 2);  // gap 1-2pt
+    if (code % 2 === 0 && cx + bw <= x + w) {
+      page.drawRectangle({ x: cx, y, width: bw, height: h, color: C.ink });
+    }
+    cx += bw + gap;
+    i++;
+  }
+}
+
 async function cardPDF(
   doc: PDFDocument,
   cfg: CardCfg,
@@ -444,54 +464,77 @@ async function cardPDF(
   const D = docLabels(opts.lang ?? "en", opts.labels);
   const white = rgb(1, 1, 1);
 
-  // top colour bar: school name + tag
-  const barH = 40;
-  page.drawRectangle({ x: 0, y: H - barH, width: W, height: barH, color: edu });
+  const headH = 44;
+  const footH = 30;
+  const M = 16;
+
+  // header band: school name + tag, with a softer accent rule beneath
+  page.drawRectangle({ x: 0, y: H - headH, width: W, height: headH, color: edu });
+  page.drawRectangle({ x: 0, y: H - headH - 3, width: W, height: 3, color: edu, opacity: 0.55 });
   page.drawText(opts.branding?.schoolName?.trim() || D.schoolNamePh, {
-    x: 16, y: H - 26, size: 13, font: serifB, color: white,
+    x: M, y: H - 27, size: 13, font: serifB, color: white,
   });
   const tw = sans.widthOfTextAtSize(SH(cfg.tag), 8);
-  page.drawText(cfg.tag, { x: W - 16 - tw, y: H - 24, size: 8, font: sans, color: white });
+  page.drawText(cfg.tag, { x: W - M - tw, y: H - 25, size: 8, font: sans, color: white });
 
-  // photo (left)
-  const boxX = 16, boxW = 50, boxH = 64, boxTop = H - barH - 10;
-  const photo = await embedDataUrl(doc, opts.photoDataUrl, boxH, boxW);
+  // photo (left) in an accent frame
+  const fX = M, fW = 60, fH = 74, fTop = H - headH - 12;
+  page.drawRectangle({ x: fX - 2, y: fTop - fH - 2, width: fW + 4, height: fH + 4, color: edu });
+  page.drawRectangle({ x: fX, y: fTop - fH, width: fW, height: fH, color: C.paper });
+  const photo = await embedDataUrl(doc, opts.photoDataUrl, fH, fW);
   if (photo) {
     page.drawImage(photo.image, {
-      x: boxX + (boxW - photo.w) / 2,
-      y: boxTop - boxH + (boxH - photo.h) / 2,
+      x: fX + (fW - photo.w) / 2,
+      y: fTop - fH + (fH - photo.h) / 2,
       width: photo.w, height: photo.h,
     });
-  } else {
-    page.drawRectangle({
-      x: boxX, y: boxTop - boxH, width: boxW, height: boxH,
-      borderColor: C.line, borderWidth: 1, color: C.paper,
-    });
   }
 
-  // info (middle)
-  const ix = boxX + boxW + 14;
-  let y = H - barH - 26;
-  page.drawText(cfg.name || D.studentName, { x: ix, y, size: 16, font: serifB, color: C.ink });
-  y -= 13;
-  page.drawText(cfg.role.toUpperCase(), { x: ix, y, size: 8, font: sans, color: C.muted });
-  y -= 22;
-  for (const r of cfg.rows) {
-    page.drawText(r.k.toUpperCase(), { x: ix, y, size: 8, font: sans, color: C.muted });
-    page.drawText(r.v || "—", { x: ix, y: y - 13, size: 13, font: sansB, color: C.ink });
-    y -= 30;
-  }
+  // info block
+  const ix = fX + fW + 16;
+  page.drawText(cfg.name || D.studentName, { x: ix, y: fTop - 12, size: 15, font: serifB, color: C.ink });
+  page.drawText(cfg.role.toUpperCase(), { x: ix, y: fTop - 26, size: 7.5, font: sans, color: C.muted });
 
-  // QR (right)
-  const qr = await embedDataUrl(doc, opts.qrDataUrl, 76, 76);
-  const qrX = W - 16 - 76;
+  // fields as a 2-up grid
+  const colW = 96;
+  const fy = fTop - 50;
+  cfg.rows.forEach((r, i) => {
+    const cxx = ix + (i % 2) * colW;
+    const cyy = fy - Math.floor(i / 2) * 30;
+    page.drawText(r.k.toUpperCase(), { x: cxx, y: cyy, size: 7, font: sans, color: C.muted });
+    page.drawText(r.v || "—", { x: cxx, y: cyy - 12, size: 11.5, font: sansB, color: C.ink });
+  });
+
+  // signature line in the lower-left of the body
+  const sigW = 150, sigBaseY = footH + 12;
+  const sigImg = await embedDataUrl(doc, opts.branding?.signatureDataUrl, 22, sigW);
+  if (sigImg) {
+    page.drawImage(sigImg.image, { x: ix, y: sigBaseY + 4, width: sigImg.w, height: sigImg.h });
+  }
+  page.drawLine({
+    start: { x: ix, y: sigBaseY }, end: { x: ix + sigW, y: sigBaseY },
+    thickness: 0.75, color: C.line,
+  });
+  page.drawText(D.signature.toUpperCase(), { x: ix, y: sigBaseY - 9, size: 6.5, font: sans, color: C.muted });
+
+  // QR (top-right, aligned with the info block)
+  const qrS = 58;
+  const qrX = W - M - qrS;
+  const qrY = fTop - qrS;
+  const qr = await embedDataUrl(doc, opts.qrDataUrl, qrS, qrS);
   if (qr) {
-    page.drawImage(qr.image, { x: qrX, y: 36, width: qr.w, height: qr.h });
+    page.drawImage(qr.image, { x: qrX, y: qrY, width: qr.w, height: qr.h });
   } else {
-    page.drawRectangle({ x: qrX, y: 36, width: 76, height: 76, borderColor: C.line, borderWidth: 1 });
+    page.drawRectangle({ x: qrX, y: qrY, width: qrS, height: qrS, borderColor: C.line, borderWidth: 1 });
   }
-  const idw = sansB.widthOfTextAtSize(SH(cfg.idValue), 10);
-  page.drawText(cfg.idValue, { x: qrX + 38 - idw / 2, y: 20, size: 10, font: sansB, color: edu });
+
+  // footer: full-width barcode + id number
+  page.drawRectangle({ x: 0, y: 0, width: W, height: footH, color: C.paper });
+  page.drawLine({ start: { x: 0, y: footH }, end: { x: W, y: footH }, thickness: 0.75, color: C.line });
+  drawBarcode(page, M, 13, W - M * 2, 11, cfg.idValue);
+  const idTxt = cfg.idValue || "";
+  const idw = sansB.widthOfTextAtSize(SH(idTxt), 8);
+  page.drawText(idTxt, { x: (W - idw) / 2, y: 3, size: 8, font: sansB, color: C.ink });
 }
 
 async function idCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
