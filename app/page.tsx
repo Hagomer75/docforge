@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n, LangToggle } from "./i18n";
 import { FIELD_I18N, GROUP_I18N, TEMPLATE_I18N } from "@/lib/i18n";
+import type { DocFont } from "@/lib/templates";
+
+const FONTS: DocFont[] = ["classic", "modern", "typewriter"];
+const CARD_SLUGS = new Set(["student-id-card", "library-card", "hall-pass"]);
 
 type Field = { key: string; label: string; required: boolean };
 type Template = {
@@ -27,6 +31,7 @@ type Branding = {
   logoDataUrl: string | null;
   logoPos: LogoPos;
   signatureDataUrl: string | null;
+  font: DocFont;
 };
 
 const BATCH_SIZE = 25;
@@ -38,6 +43,7 @@ const EMPTY_BRANDING: Branding = {
   logoDataUrl: null,
   logoPos: "center",
   signatureDataUrl: null,
+  font: "classic",
 };
 
 function autoGuess(template: Template, columns: string[]): Record<string, string> {
@@ -168,6 +174,8 @@ export default function Home() {
   const [genBusy, setGenBusy] = useState(false);
   const [singleBusy, setSingleBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [cardsPerPage, setCardsPerPage] = useState<1 | 2 | 4 | 10>(1);
+  const [cutGuides, setCutGuides] = useState(true);
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
   const [genMsg, setGenMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -281,6 +289,7 @@ export default function Home() {
     setSubjectCols([]);
     setFilenamePattern("");
     setPreviewIndex(0);
+    setCardsPerPage(1); // reset sheet mode when switching templates
     setOpen(2); // picking a template collapses panel 1 and opens upload & map
   }
 
@@ -331,6 +340,8 @@ export default function Home() {
       rows,
       startIndex,
       lang,
+      cardsPerPage,
+      cutGuides,
     };
   }
 
@@ -365,6 +376,29 @@ export default function Home() {
     setGenMsg(null);
     setGenProgress({ done: 0, total: upload.rowCount });
     try {
+      // Card sheet mode → one combined PDF (not a ZIP).
+      if (isCard && cardsPerPage > 1) {
+        if (upload.rowCount > 100) {
+          setGenMsg({ text: t("sheetCap"), ok: false });
+          return;
+        }
+        const r = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildBody(upload.rows, 0)),
+        });
+        if (!r.ok) throw new Error((await r.json()).error || t("genFailed"));
+        const { files } = (await r.json()) as { files: { name: string; data: string }[] };
+        const url = URL.createObjectURL(b64toBlob(files[0].data));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `docforge-${selected.slug}-sheet.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setGenMsg({ text: t("sheetDone"), ok: true });
+        return;
+      }
+
       const { default: JSZip } = await import("jszip");
       const zip = new JSZip();
       const used = new Map<string, number>();
@@ -410,6 +444,9 @@ export default function Home() {
 
   const mappedCols = new Set(Object.values(mapping).filter(Boolean));
   const recordTotal = upload?.rowCount ?? 0;
+  const isCard = !!selected && CARD_SLUGS.has(selected.slug);
+  const perPageOptions: (1 | 2 | 4 | 10)[] =
+    selected?.slug === "hall-pass" ? [1, 2, 4] : [1, 2, 4, 10];
 
   // Accordion: only one panel is expanded; the others collapse to a summary
   // header. A panel is reachable only once its prerequisites are met.
@@ -677,6 +714,20 @@ export default function Home() {
                     </div>
                   </div>
                   {sigErr && <div className="msg err">{sigErr}</div>}
+                  <div className="maprow">
+                    <label>{t("fontStyle")}</label>
+                    <div className="seg" style={{ flex: 1 }}>
+                      {FONTS.map((f) => (
+                        <button
+                          key={f}
+                          className={"seg-btn" + (branding.font === f ? " on" : "")}
+                          onClick={() => setBranding((b) => ({ ...b, font: f }))}
+                        >
+                          {t(("font_" + f) as Parameters<typeof t>[0])}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   {selected.slug === "certificate-classic" && (
                     <div className="maprow">
                       <label>{t("headerPos")}</label>
@@ -694,6 +745,36 @@ export default function Home() {
                     </div>
                   )}
                   {presetMsg && <div className="msg ok">{presetMsg}</div>}
+                </div>
+              )}
+
+              {upload && isCard && (
+                <div className="section">
+                  <div className="section-h">{t("cardsPerPage")}</div>
+                  <div className="seg" style={{ maxWidth: 280 }}>
+                    {perPageOptions.map((n) => (
+                      <button
+                        key={n}
+                        className={"seg-btn" + (cardsPerPage === n ? " on" : "")}
+                        onClick={() => setCardsPerPage(n)}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  {cardsPerPage > 1 && (
+                    <label className="chip" style={{ marginTop: 12 }}>
+                      <input
+                        type="checkbox"
+                        checked={cutGuides}
+                        onChange={(e) => setCutGuides(e.target.checked)}
+                      />
+                      {t("cutGuides")}
+                    </label>
+                  )}
+                  <p className="hint" style={{ marginTop: 8 }}>
+                    {t("sheetHint")}
+                  </p>
                 </div>
               )}
 
@@ -805,6 +886,11 @@ export default function Home() {
               {selected.subjects && ` · ${t("subjects")}: ${subjectCols.length}`}
               {branding.schoolName && ` · ${branding.schoolName}`}
             </div>
+            {isCard && cardsPerPage > 1 && (
+              <div className="msg ok" style={{ marginTop: 0 }}>
+                {t("sheetSummary", { n: cardsPerPage })}
+              </div>
+            )}
 
             {(issues.blanks > 0 || issues.dups > 0) && (
               <div className="warn">
@@ -876,6 +962,7 @@ function brandingPayload(b: Branding) {
     logoDataUrl?: string;
     logoPos?: LogoPos;
     signatureDataUrl?: string;
+    font?: DocFont;
   } = {};
   if (b.schoolName.trim()) out.schoolName = b.schoolName.trim();
   if (b.accent && b.accent.toLowerCase() !== DEFAULT_ACCENT.toLowerCase()) out.accent = b.accent;
@@ -884,5 +971,6 @@ function brandingPayload(b: Branding) {
     out.logoPos = b.logoPos;
   }
   if (b.signatureDataUrl) out.signatureDataUrl = b.signatureDataUrl;
+  if (b.font && b.font !== "classic") out.font = b.font;
   return out;
 }

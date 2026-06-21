@@ -27,8 +27,13 @@ export type DocFonts = {
   sansB: PDFFont;
 };
 
-// One font set per document. For Arabic, every role maps to an Amiri weight.
-export async function embedDocFonts(doc: PDFDocument, lang?: string): Promise<DocFonts> {
+// One font set per document. Arabic always uses Amiri (the `font` style only
+// affects Latin/EN documents). The AR early-return is the safety chokepoint.
+export async function embedDocFonts(
+  doc: PDFDocument,
+  lang?: string,
+  font?: "classic" | "modern" | "typewriter"
+): Promise<DocFonts> {
   if (lang === "ar") {
     loadFonts();
     doc.registerFontkit(fontkit);
@@ -37,12 +42,26 @@ export async function embedDocFonts(doc: PDFDocument, lang?: string): Promise<Do
     const bold = await doc.embedFont(amiriBold!);
     return { serif: reg, serifB: bold, serifI: reg, sans: reg, sansB: bold };
   }
+  const e = (f: StandardFonts) => doc.embedFont(f);
+  if (font === "modern") {
+    const r = await e(StandardFonts.Helvetica);
+    const b = await e(StandardFonts.HelveticaBold);
+    const i = await e(StandardFonts.HelveticaOblique);
+    return { serif: r, serifB: b, serifI: i, sans: r, sansB: b };
+  }
+  if (font === "typewriter") {
+    const r = await e(StandardFonts.Courier);
+    const b = await e(StandardFonts.CourierBold);
+    const i = await e(StandardFonts.CourierOblique);
+    return { serif: r, serifB: b, serifI: i, sans: r, sansB: b };
+  }
+  // classic (default) — preserves today's exact look.
   return {
-    serif: await doc.embedFont(StandardFonts.TimesRoman),
-    serifB: await doc.embedFont(StandardFonts.TimesRomanBold),
-    serifI: await doc.embedFont(StandardFonts.TimesRomanItalic),
-    sans: await doc.embedFont(StandardFonts.Helvetica),
-    sansB: await doc.embedFont(StandardFonts.HelveticaBold),
+    serif: await e(StandardFonts.TimesRoman),
+    serifB: await e(StandardFonts.TimesRomanBold),
+    serifI: await e(StandardFonts.TimesRomanItalic),
+    sans: await e(StandardFonts.Helvetica),
+    sansB: await e(StandardFonts.HelveticaBold),
   };
 }
 

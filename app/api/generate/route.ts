@@ -5,7 +5,7 @@ import {
   resolveSubjects,
   resolveValues,
 } from "@/lib/templates";
-import { renderPDF } from "@/lib/pdf";
+import { renderPDF, renderCardSheet, SheetRow } from "@/lib/pdf";
 import { qrDataUrl } from "@/lib/qr";
 import { fetchImageDataUrl } from "@/lib/image";
 
@@ -16,6 +16,8 @@ export const maxDuration = 60;
 // streams batches and assembles the final ZIP in the browser, so a whole grade
 // never has to render inside a single serverless invocation (60s / memory cap).
 const MAX_BATCH = 40;
+const SHEET_MAX = 100; // sheet mode sends every row in one request
+const CARD_SLUGS = new Set(["student-id-card", "library-card", "hall-pass"]);
 
 function safeName(s: string, fallback: string): string {
   const cleaned = s.replace(/[^a-z0-9\- ]/gi, "").trim().replace(/\s+/g, "_");
@@ -45,6 +47,8 @@ export async function POST(req: NextRequest) {
       startIndex,
       filenamePattern,
       lang,
+      cardsPerPage,
+      cutGuides,
     } = await req.json();
     const template = getTemplate(templateSlug);
     if (!template) {
@@ -53,9 +57,11 @@ export async function POST(req: NextRequest) {
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: "No data rows to generate." }, { status: 400 });
     }
-    if (rows.length > MAX_BATCH) {
+    const sheetMode = Number(cardsPerPage) > 1 && CARD_SLUGS.has(template.slug);
+    const cap = sheetMode ? SHEET_MAX : MAX_BATCH;
+    if (rows.length > cap) {
       return NextResponse.json(
-        { error: `Batch too large (max ${MAX_BATCH} rows per request).` },
+        { error: `Batch too large (max ${cap} rows per request).` },
         { status: 400 }
       );
     }
@@ -84,6 +90,29 @@ export async function POST(req: NextRequest) {
           })
         )
       : [];
+
+    const docLang = lang === "ar" ? "ar" : "en";
+
+    // Sheet mode: tile every card onto shared A4 pages → one combined PDF.
+    if (sheetMode) {
+      const sheetRows: SheetRow[] = await Promise.all(
+        rows.map(async (r: Record<string, unknown>, i: number) => {
+          const values = resolveValues(template, map, r);
+          const qr = template.qrField ? await qrDataUrl(values[template.qrField]) : undefined;
+          return { v: values, qrDataUrl: qr, photoDataUrl: photos[i] };
+        })
+      );
+      const pdf = await renderCardSheet(template.slug, sheetRows, {
+        branding,
+        lang: docLang,
+        cardsPerPage,
+        cutGuides,
+      });
+      return NextResponse.json({
+        sheet: true,
+        files: [{ name: `${template.slug}-sheet`, data: Buffer.from(pdf).toString("base64") }],
+      });
+    }
 
     const files: { name: string; data: string }[] = [];
     for (let i = 0; i < rows.length; i++) {

@@ -181,12 +181,15 @@ export function getTemplate(slug: string): Template | undefined {
 export type FieldValues = Record<string, string>;
 export type Subject = { label: string; mark: string };
 export type LogoPos = "left" | "center" | "right";
+export type DocFont = "classic" | "modern" | "typewriter";
+export const DEFAULT_FONT: DocFont = "classic";
 export type Branding = {
   schoolName?: string;
   accent?: string; // hex, e.g. "#2F6F6A"
   logoDataUrl?: string; // data:image/...;base64,...
   logoPos?: LogoPos; // header alignment on the certificate
   signatureDataUrl?: string; // signature image for documents with a sign line
+  font?: DocFont; // document typography style (Latin only; Arabic stays Amiri)
 };
 export type RenderOpts = {
   subjects?: Subject[];
@@ -194,7 +197,21 @@ export type RenderOpts = {
   qrDataUrl?: string; // server-generated QR for templates with qrField
   photoDataUrl?: string; // server-fetched photo for templates with photoField
   lang?: "en" | "ar"; // document language (drives labels + Arabic shaping)
+  cardsPerPage?: 1 | 2 | 4 | 10; // card-sheet tiling (cards only)
+  cutGuides?: boolean; // draw corner cut marks on card sheets
 };
+
+// Map each font style to display/body CSS families for the HTML preview.
+// Classic keeps today's look (Fraunces + Inter).
+const FONT_CSS: Record<DocFont, { display: string; body: string }> = {
+  classic: { display: "'Fraunces',serif", body: "'Inter',sans-serif" },
+  modern: { display: "'Inter',sans-serif", body: "'Inter',sans-serif" },
+  typewriter: { display: "'Courier New',monospace", body: "'Courier New',monospace" },
+};
+function fontVars(opts: RenderOpts): string {
+  const f = FONT_CSS[opts.branding?.font ?? "classic"];
+  return `:root{--f-display:${f.display};--f-body:${f.body}}`;
+}
 
 export function resolveValues(
   template: Template,
@@ -269,11 +286,12 @@ function docHead(edu: string, opts: RenderOpts): string {
   return `<style>
 ${FONTS}
 ${arFont(opts)}
+${fontVars(opts)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;color:${DEFAULTS.ink};background:#fff;padding:34px 40px}
+body{font-family:var(--f-body);color:${DEFAULTS.ink};background:#fff;padding:34px 40px}
 .bhead{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid ${edu};padding-bottom:12px}
 .bhead .l{display:flex;align-items:center;gap:12px}
-.bhead h1{font-family:'Fraunces',serif;font-weight:700;font-size:22px;color:${edu}}
+.bhead h1{font-family:var(--f-display);font-weight:700;font-size:22px;color:${edu}}
 .bhead .sn{font-size:12px;color:${DEFAULTS.muted}}
 .bhead .meta{text-align:right;font-size:12px;color:${DEFAULTS.muted}}
 .sign{margin-top:40px;display:flex;justify-content:space-between;font-size:12px;color:${DEFAULTS.muted}}
@@ -311,18 +329,19 @@ function certificateHTML(v: FieldValues, opts: RenderOpts): string {
   return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8"><style>
 ${FONTS}
 ${arFont(opts)}
+${fontVars(opts)}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
-body{font-family:'Inter',sans-serif;color:${DEFAULTS.ink};background:#fff;display:flex;align-items:center;justify-content:center;padding:18px}
+body{font-family:var(--f-body);color:${DEFAULTS.ink};background:#fff;display:flex;align-items:center;justify-content:center;padding:18px}
 .cert{width:100%;max-width:760px;aspect-ratio:1.414/1;border:3px solid ${edu};padding:10px}
 .inner{height:100%;border:1px solid ${DEFAULTS.gold};padding:4.5% 8% 6%;display:flex;flex-direction:column;align-items:center;text-align:center}
 .head{height:62px;width:100%;display:flex;align-items:center;gap:12px;justify-content:${justify};flex-shrink:0;margin-bottom:10px}
 .head img{max-height:48px;max-width:190px;object-fit:contain;display:block}
-.head .sn{font-family:'Fraunces',serif;font-weight:600;font-size:15px;color:${edu};letter-spacing:.02em;white-space:nowrap}
+.head .sn{font-family:var(--f-display);font-weight:600;font-size:15px;color:${edu};letter-spacing:.02em;white-space:nowrap}
 .kicker{font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:${DEFAULTS.gold};font-weight:600}
-.title{font-family:'Fraunces',serif;font-weight:700;font-size:27px;color:${edu};margin:6px 0 14px;line-height:1.12}
+.title{font-family:var(--f-display);font-weight:700;font-size:27px;color:${edu};margin:6px 0 14px;line-height:1.12}
 .intro{font-size:13px;color:${DEFAULTS.muted};letter-spacing:.04em}
-.name{font-family:'Fraunces',serif;font-weight:600;font-size:31px;margin:8px 0;border-bottom:2px solid ${DEFAULTS.line};padding-bottom:8px;min-width:60%}
+.name{font-family:var(--f-display);font-weight:600;font-size:31px;margin:8px 0;border-bottom:2px solid ${DEFAULTS.line};padding-bottom:8px;min-width:60%}
 .detail{font-size:13px;color:${DEFAULTS.muted};font-style:italic;margin-top:6px;max-width:80%}
 .foot{margin-top:auto;display:flex;justify-content:space-between;width:100%;padding-top:20px;font-size:12px;color:${DEFAULTS.muted}}
 .foot b{display:block;color:${DEFAULTS.ink};font-weight:600;border-top:1px solid ${DEFAULTS.line};padding-top:5px;min-width:120px}
@@ -442,19 +461,20 @@ function cardHTML(
   return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8"><style>
 ${FONTS}
 ${arFont(opts)}
+${fontVars(opts)}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
-body{font-family:'Inter',sans-serif;background:#fff;display:flex;align-items:center;justify-content:center;padding:24px}
+body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;justify-content:center;padding:24px}
 .card{width:430px;height:271px;border-radius:14px;overflow:hidden;border:1px solid ${DEFAULTS.line};box-shadow:0 18px 40px -24px rgba(28,42,57,.5);display:flex;flex-direction:column}
 .cardtop{background:${edu};color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px}
 .cardtop img.logo{max-height:30px;max-width:120px;object-fit:contain;filter:brightness(0) invert(1)}
-.cardtop .sn{font-family:'Fraunces',serif;font-weight:600;font-size:15px}
+.cardtop .sn{font-family:var(--f-display);font-weight:600;font-size:15px}
 .cardtop .tag{margin-left:auto;font-size:9px;letter-spacing:.18em;text-transform:uppercase;opacity:.85}
 .cardbody{flex:1;display:flex;padding:14px 16px;gap:14px;align-items:stretch}
 .photo{width:64px;height:84px;border-radius:7px;object-fit:cover;border:1px solid ${DEFAULTS.line};flex-shrink:0;background:${DEFAULTS.paper}}
 .photo.ph{display:flex;align-items:center;justify-content:center;color:${DEFAULTS.muted};font-size:10px;border-style:dashed}
 .info{flex:1;min-width:0}
-.info .nm{font-family:'Fraunces',serif;font-weight:600;font-size:19px;color:${DEFAULTS.ink};line-height:1.1}
+.info .nm{font-family:var(--f-display);font-weight:600;font-size:19px;color:${DEFAULTS.ink};line-height:1.1}
 .info .role{font-size:10px;color:${DEFAULTS.muted};text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
 .info .rowi{margin-top:8px}
 .info .k{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:${DEFAULTS.muted}}
@@ -507,18 +527,19 @@ function hallPassHTML(v: FieldValues, opts: RenderOpts): string {
   return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8"><style>
 ${FONTS}
 ${arFont(opts)}
+${fontVars(opts)}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
-body{font-family:'Inter',sans-serif;background:#fff;display:flex;align-items:center;justify-content:center;padding:24px}
+body{font-family:var(--f-body);background:#fff;display:flex;align-items:center;justify-content:center;padding:24px}
 .pass{width:460px;height:240px;border-radius:14px;overflow:hidden;border:1px solid ${DEFAULTS.line};box-shadow:0 18px 40px -24px rgba(28,42,57,.5);display:flex}
 .stripe{width:12px;background:${edu};flex-shrink:0}
 .pb{flex:1;padding:18px 22px;display:flex;flex-direction:column}
 .ptop{display:flex;align-items:center;justify-content:space-between}
 .ptag{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:${edu};font-weight:700}
 .psn{font-size:11px;color:${DEFAULTS.muted}}
-.pttl{font-family:'Fraunces',serif;font-weight:700;font-size:27px;color:${DEFAULTS.ink};margin:1px 0 12px}
+.pttl{font-family:var(--f-display);font-weight:700;font-size:27px;color:${DEFAULTS.ink};margin:1px 0 12px}
 .pnm{font-size:13px;color:${DEFAULTS.muted}}
-.pnm b{font-family:'Fraunces',serif;font-weight:600;font-size:20px;color:${DEFAULTS.ink};display:block}
+.pnm b{font-family:var(--f-display);font-weight:600;font-size:20px;color:${DEFAULTS.ink};display:block}
 .grid{margin-top:auto;display:flex;gap:30px}
 .grid .k{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:${DEFAULTS.muted}}
 .grid .v{font-size:15px;font-weight:600;color:${DEFAULTS.ink}}

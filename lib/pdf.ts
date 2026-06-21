@@ -135,7 +135,7 @@ async function drawDocHeader(
   metaLines: string[]
 ): Promise<number> {
   const { width, height } = page.getSize();
-  const { serifB, sans } = await embedDocFonts(doc, opts.lang);
+  const { serifB, sans } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
   const M = 48;
   const right = width - M;
   let y = height - 70;
@@ -170,7 +170,7 @@ async function drawSignatureRow(
   value: string
 ): Promise<void> {
   const { width } = page.getSize();
-  const { sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const { sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
   const D = docLabels(opts.lang ?? "en");
   const M = 48;
   const right = width - M;
@@ -195,7 +195,7 @@ async function certificatePDF(
   patchDraw(page);
   const { width, height } = page.getSize();
   const edu = accentColor(opts.branding);
-  const { serifB, serifI, sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const { serifB, serifI, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
   const D = docLabels(opts.lang ?? "en");
   const mid = width / 2;
 
@@ -270,7 +270,7 @@ async function progressReportPDF(
   patchDraw(page);
   const { width, height } = page.getSize();
   const edu = accentColor(opts.branding);
-  const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
   const D = docLabels(opts.lang ?? "en");
   const M = 48;
   const right = width - M;
@@ -354,7 +354,7 @@ async function feeReceiptPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts)
   patchDraw(page);
   const { width } = page.getSize();
   const edu = accentColor(opts.branding);
-  const { sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const { sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
   const D = docLabels(opts.lang ?? "en");
   const M = 48;
   const right = width - M;
@@ -429,7 +429,7 @@ async function cardPDF(
   const page = doc.addPage([W, H]);
   patchDraw(page);
   const edu = accentColor(opts.branding);
-  const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
   const D = docLabels(opts.lang ?? "en");
   const white = rgb(1, 1, 1);
 
@@ -506,7 +506,7 @@ async function hallPassPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): 
   const page = doc.addPage([W, H]);
   patchDraw(page);
   const edu = accentColor(opts.branding);
-  const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
   const D = docLabels(opts.lang ?? "en");
 
   page.drawRectangle({ x: 0, y: 0, width: 10, height: H, color: edu });
@@ -556,7 +556,7 @@ async function letterPDF(
   patchDraw(page);
   const { width } = page.getSize();
   const edu = accentColor(opts.branding);
-  const { sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const { sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
   const M = 48;
   const right = width - M;
   const textW = right - M;
@@ -663,6 +663,87 @@ async function referenceLetterPDF(doc: PDFDocument, v: FieldValues, opts: Render
     [],
     v.position || D.authSignatory, v.signatory, v
   );
+}
+
+/* ---------- card sheets (tile many cards per A4 page) ---------- */
+
+const A4 = { w: 595.28, h: 841.89 };
+
+type Layout = {
+  cols: number; rows: number; cw: number; ch: number;
+  gapX: number; gapY: number; marginX: number; marginY: number; scale: number;
+};
+
+// Tiling layout for a card slug at N-up. Card native sizes: id/library 360x227,
+// hall-pass 400x200.
+function sheetLayout(slug: string, n: number): Layout {
+  const isHall = slug === "hall-pass";
+  const baseW = isHall ? 400 : 360;
+  const baseH = isHall ? 200 : 227;
+  if (n === 10 && !isHall) {
+    const cols = 2, rows = 5, gapX = 18, gapY = 14, marginX = 40, marginY = 40;
+    const cw = (A4.w - 2 * marginX - gapX) / cols;
+    const scale = cw / baseW;
+    return { cols, rows, cw, ch: baseH * scale, gapX, gapY, marginX, marginY, scale };
+  }
+  if (n === 4) {
+    const gapY = isHall ? 14 : 16, marginY = isHall ? 36 : 40;
+    return { cols: 1, rows: 4, cw: baseW, ch: baseH, gapX: 0, gapY, marginX: (A4.w - baseW) / 2, marginY, scale: 1 };
+  }
+  if (n === 2) {
+    const gapY = isHall ? 24 : 30, marginY = isHall ? 80 : 90;
+    return { cols: 1, rows: 2, cw: baseW, ch: baseH, gapX: 0, gapY, marginX: (A4.w - baseW) / 2, marginY, scale: 1 };
+  }
+  // 1-up centred
+  return { cols: 1, rows: 1, cw: baseW, ch: baseH, gapX: 0, gapY: 0, marginX: (A4.w - baseW) / 2, marginY: (A4.h - baseH) / 2, scale: 1 };
+}
+
+// L-shaped crop marks just outside each tile corner.
+function cutGuideMarks(page: PDFPage, x: number, y: number, w: number, h: number) {
+  const t = 8, g = 3, o = { color: C.line, thickness: 0.5 };
+  const corner = (cx: number, cy: number, dx: number, dy: number) => {
+    page.drawLine({ start: { x: cx + dx * g, y: cy }, end: { x: cx + dx * (g + t), y: cy }, ...o });
+    page.drawLine({ start: { x: cx, y: cy + dy * g }, end: { x: cx, y: cy + dy * (g + t) }, ...o });
+  };
+  corner(x, y, -1, -1);
+  corner(x + w, y, 1, -1);
+  corner(x, y + h, -1, 1);
+  corner(x + w, y + h, 1, 1);
+}
+
+export type SheetRow = { v: FieldValues; qrDataUrl?: string; photoDataUrl?: string };
+
+// Render many cards tiled onto shared A4 pages — one combined multi-page PDF.
+// Reuses renderPDF per card (pixel parity, Arabic + font style for free).
+export async function renderCardSheet(
+  slug: string,
+  rows: SheetRow[],
+  opts: RenderOpts = {}
+): Promise<Uint8Array> {
+  curLang = opts.lang === "ar" ? "ar" : "en";
+  const out = await PDFDocument.create();
+  const L = sheetLayout(slug, opts.cardsPerPage ?? 1);
+  const perPage = L.cols * L.rows;
+  let page = out.addPage([A4.w, A4.h]);
+  for (let i = 0; i < rows.length; i++) {
+    const slot = i % perPage;
+    if (i > 0 && slot === 0) page = out.addPage([A4.w, A4.h]);
+    const col = slot % L.cols;
+    const row = Math.floor(slot / L.cols);
+    const ox = L.marginX + col * (L.cw + L.gapX);
+    const oy = A4.h - L.marginY - L.ch - row * (L.ch + L.gapY);
+    const cardBytes = await renderPDF(slug, rows[i].v, {
+      ...opts,
+      cardsPerPage: 1,
+      qrDataUrl: rows[i].qrDataUrl,
+      photoDataUrl: rows[i].photoDataUrl,
+    });
+    const src = await PDFDocument.load(cardBytes);
+    const [embedded] = await out.embedPdf(src, [0]);
+    page.drawPage(embedded, { x: ox, y: oy, xScale: L.scale, yScale: L.scale });
+    if (opts.cutGuides !== false) cutGuideMarks(page, ox, oy, L.cw, L.ch);
+  }
+  return out.save();
 }
 
 export async function renderPDF(
