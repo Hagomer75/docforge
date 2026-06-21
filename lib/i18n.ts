@@ -98,6 +98,13 @@ export const UI: Record<Lang, Dict> = {
     nudgeRequired: "Required, but no matching column found: {fields}. Add these columns to your file, or map them above.",
     nudgeOptional: "Optional fields with nothing to map: {fields}.",
     nudgeHint: "These were not in your spreadsheet — the document may have blanks where they belong.",
+    photosTitle: "Student photos",
+    photoUpload: "Upload photos",
+    photoClear: "Clear",
+    photosHint: "Upload photos named by the {id} — e.g. STU-001.jpg. Each is matched to a student and printed on the card.",
+    photoMatched: "{n} of {total} students matched",
+    photoNeedMatch: "Map the {id} field first so photos can be matched by filename.",
+    photoNone: "Those weren't images. Use PNG or JPG files.",
   },
   ar: {
     tagline: "مستندات بالجملة",
@@ -183,6 +190,13 @@ export const UI: Record<Lang, Dict> = {
     nudgeRequired: "مطلوبة ولكن لم يُعثر على عمود مطابق: {fields}. أضف هذه الأعمدة إلى ملفك أو اربطها أعلاه.",
     nudgeOptional: "حقول اختيارية لا يوجد ما يُربط بها: {fields}.",
     nudgeHint: "لم تكن هذه في جدولك — قد يحتوي المستند على فراغات في أماكنها.",
+    photosTitle: "صور الطلاب",
+    photoUpload: "رفع الصور",
+    photoClear: "مسح",
+    photosHint: "ارفع صوراً مسماة بـ {id} — مثل STU-001.jpg. تُطابَق كل صورة بطالب وتُطبع على البطاقة.",
+    photoMatched: "تمت مطابقة {n} من {total} طالب",
+    photoNeedMatch: "اربط حقل {id} أولاً ليتم مطابقة الصور حسب اسم الملف.",
+    photoNone: "هذه ليست صوراً. استخدم ملفات PNG أو JPG.",
   },
 };
 

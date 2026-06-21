@@ -17,6 +17,7 @@ type Template = {
   fields: Field[];
   subjects?: boolean;
   qrField?: string;
+  photoField?: string;
   group?: string;
 };
 type Upload = {
@@ -178,6 +179,8 @@ export default function Home() {
   const [editing, setEditing] = useState(false);
   const [cardsPerPage, setCardsPerPage] = useState<1 | 2 | 4 | 10>(1);
   const [cutGuides, setCutGuides] = useState(true);
+  const [photoMap, setPhotoMap] = useState<Record<string, string>>({});
+  const [photoErr, setPhotoErr] = useState("");
   const [labelOverrides, setLabelOverrides] = useState<{
     en: Record<string, string>;
     ar: Record<string, string>;
@@ -187,6 +190,7 @@ export default function Home() {
   const fileInput = useRef<HTMLInputElement>(null);
   const logoInput = useRef<HTMLInputElement>(null);
   const sigInput = useRef<HTMLInputElement>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
   const { t, lang } = useI18n();
 
   // Localised labels for server-driven template/field data.
@@ -281,10 +285,10 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             templateSlug: selected.slug,
-            mapping,
+            mapping: effMapping(),
             subjectColumns: subjectCols,
             branding: brandingPayload(branding),
-            row: upload.rows[idx],
+            row: withPhotos([upload.rows[idx]])[0],
             lang,
             labels: labelOverrides[lang],
           }),
@@ -296,7 +300,7 @@ export default function Home() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex, lang, labelOverrides]);
+  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex, lang, labelOverrides, photoMap]);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -342,6 +346,7 @@ export default function Home() {
     setFilenamePattern("");
     setPreviewIndex(0);
     setCardsPerPage(1); // reset sheet mode when switching templates
+    setPhotoMap({}); // photos are matched per template's ID field
     setOpen(2); // picking a template collapses panel 1 and opens upload & map
   }
 
@@ -385,11 +390,11 @@ export default function Home() {
   function buildBody(rows: Record<string, string>[], startIndex: number) {
     return {
       templateSlug: selected!.slug,
-      mapping,
+      mapping: effMapping(),
       subjectColumns: subjectCols,
       branding: brandingPayload(branding),
       filenamePattern,
-      rows,
+      rows: withPhotos(rows),
       startIndex,
       lang,
       cardsPerPage,
@@ -504,6 +509,63 @@ export default function Home() {
   const isCard = !!selected && CARD_SLUGS.has(selected.slug);
   const perPageOptions: (1 | 2 | 4 | 10)[] =
     selected?.slug === "hall-pass" ? [1, 2, 4] : [1, 2, 4, 10];
+
+  // Bulk student photos: match an uploaded image's filename to the ID-field value.
+  const PHOTO_COL = "__photo__";
+  const photoMatchCol = selected?.qrField ? mapping[selected.qrField] : "";
+  const photoMatchField = selected?.qrField
+    ? selected.fields.find((f) => f.key === selected.qrField)
+    : undefined;
+  const photoFieldLabel = photoMatchField ? tf(photoMatchField) : "";
+  const photoCount = useMemo(() => {
+    if (!upload || !photoMatchCol) return 0;
+    let n = 0;
+    for (const r of upload.rows) {
+      const k = String(r[photoMatchCol] ?? "").trim().toLowerCase();
+      if (k && photoMap[k]) n++;
+    }
+    return n;
+  }, [upload, photoMatchCol, photoMap]);
+
+  function effMapping(): Record<string, string> {
+    if (selected?.photoField && Object.keys(photoMap).length && !mapping[selected.photoField]) {
+      return { ...mapping, [selected.photoField]: PHOTO_COL };
+    }
+    return mapping;
+  }
+  function withPhotos(rows: Record<string, string>[]): Record<string, string>[] {
+    if (!selected?.photoField || !Object.keys(photoMap).length || !photoMatchCol) return rows;
+    const col = mapping[selected.photoField] || PHOTO_COL;
+    return rows.map((r) => {
+      const k = String(r[photoMatchCol] ?? "").trim().toLowerCase();
+      const data = photoMap[k];
+      return data ? { ...r, [col]: data } : r;
+    });
+  }
+  function handlePhotos(files: FileList) {
+    setPhotoErr("");
+    const imgs = [...files].filter((f) => /\.(png|jpe?g)$/i.test(f.name));
+    if (!imgs.length) {
+      setPhotoErr(t("photoNone"));
+      return;
+    }
+    let done = 0;
+    const next: Record<string, string> = {};
+    imgs.forEach((f) => {
+      if (f.size > 2 * 1024 * 1024) {
+        done++;
+        if (done === imgs.length && Object.keys(next).length) setPhotoMap((m) => ({ ...m, ...next }));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        next[f.name.replace(/\.[^.]+$/, "").trim().toLowerCase()] = reader.result as string;
+        done++;
+        if (done === imgs.length) setPhotoMap((m) => ({ ...m, ...next }));
+      };
+      reader.readAsDataURL(f);
+    });
+  }
   const wordingKeys = selected ? EDITABLE_LABELS[selected.slug] ?? [] : [];
   const labelDefaults = docLabels(lang) as unknown as Record<string, string>;
 
@@ -872,6 +934,50 @@ export default function Home() {
                   <p className="hint" style={{ marginTop: 8 }}>
                     {t("sheetHint")}
                   </p>
+                </div>
+              )}
+
+              {upload && selected.photoField && (
+                <div className="section">
+                  <div className="section-h">{t("photosTitle")}</div>
+                  {!photoMatchCol ? (
+                    <p className="hint" style={{ marginTop: 0 }}>
+                      {fmt(t("photoNeedMatch"), { id: photoFieldLabel })}
+                    </p>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <button className="btn ghost small" onClick={() => photoInput.current?.click()}>
+                          {t("photoUpload")}
+                        </button>
+                        {photoCount > 0 && (
+                          <span className="chip on">
+                            {fmt(t("photoMatched"), { n: photoCount, total: upload.rowCount })}
+                          </span>
+                        )}
+                        {Object.keys(photoMap).length > 0 && (
+                          <button className="btn ghost small" onClick={() => { setPhotoMap({}); setPhotoErr(""); }}>
+                            {t("photoClear")}
+                          </button>
+                        )}
+                        <input
+                          ref={photoInput}
+                          type="file"
+                          accept=".png,.jpg,.jpeg"
+                          multiple
+                          hidden
+                          onChange={(e) => {
+                            if (e.target.files?.length) handlePhotos(e.target.files);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                      {photoErr && <div className="msg err">{photoErr}</div>}
+                      <p className="hint" style={{ marginTop: 8 }}>
+                        {fmt(t("photosHint"), { id: photoFieldLabel })}
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 
