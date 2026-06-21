@@ -6,6 +6,7 @@ import {
   resolveValues,
 } from "@/lib/templates";
 import { qrDataUrl } from "@/lib/qr";
+import { fetchImageDataUrl } from "@/lib/image";
 
 export const runtime = "nodejs";
 
@@ -21,8 +22,16 @@ export async function POST(req: NextRequest) {
       ? resolveSubjects(subjectColumns ?? [], row ?? {})
       : undefined;
     const qr = template.qrField ? await qrDataUrl(values[template.qrField]) : undefined;
+    const photo = template.photoField
+      ? await fetchImageDataUrl(values[template.photoField])
+      : undefined;
     return NextResponse.json({
-      html: renderHTML(template.slug, values, { subjects, branding, qrDataUrl: qr }),
+      html: renderHTML(template.slug, values, {
+        subjects,
+        branding,
+        qrDataUrl: qr,
+        photoDataUrl: photo,
+      }),
     });
   } catch {
     return NextResponse.json({ error: "Could not build preview." }, { status: 400 });

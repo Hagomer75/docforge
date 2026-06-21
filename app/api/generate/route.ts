@@ -7,6 +7,7 @@ import {
 } from "@/lib/templates";
 import { renderPDF } from "@/lib/pdf";
 import { qrDataUrl } from "@/lib/qr";
+import { fetchImageDataUrl } from "@/lib/image";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -72,6 +73,17 @@ export async function POST(req: NextRequest) {
     const nameKey = template.fields.find((f) => f.required)?.key ?? template.fields[0].key;
     const offset = Number.isInteger(startIndex) ? startIndex : 0;
 
+    // Pre-fetch photos for the whole batch in parallel (each guarded).
+    const photos: (string | undefined)[] = template.photoField
+      ? await Promise.all(
+          rows.map((r: Record<string, unknown>) => {
+            const col = map[template.photoField!];
+            const url = col ? r[col] : undefined;
+            return fetchImageDataUrl(url == null ? "" : String(url));
+          })
+        )
+      : [];
+
     const files: { name: string; data: string }[] = [];
     for (let i = 0; i < rows.length; i++) {
       const values = resolveValues(template, map, rows[i]);
@@ -79,7 +91,12 @@ export async function POST(req: NextRequest) {
         ? resolveSubjects(subjectColumns ?? [], rows[i])
         : undefined;
       const qr = template.qrField ? await qrDataUrl(values[template.qrField]) : undefined;
-      const pdf = await renderPDF(template.slug, values, { subjects, branding, qrDataUrl: qr });
+      const pdf = await renderPDF(template.slug, values, {
+        subjects,
+        branding,
+        qrDataUrl: qr,
+        photoDataUrl: photos[i],
+      });
       const base = applyPattern(
         filenamePattern,
         values,

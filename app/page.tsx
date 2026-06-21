@@ -136,6 +136,7 @@ export default function Home() {
   const [dragOver, setDragOver] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
   const [singleBusy, setSingleBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
   const [genMsg, setGenMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -241,6 +242,17 @@ export default function Home() {
     setFilenamePattern("");
     setPreviewIndex(0);
     setOpen(2); // picking a template collapses panel 1 and opens upload & map
+  }
+
+  // Inline edit: overwrite the mapped cell of the current record only.
+  function editCell(fieldKey: string, val: string) {
+    if (!upload) return;
+    const col = mapping[fieldKey];
+    if (!col) return;
+    const rows = upload.rows.map((r, i) =>
+      i === previewIndex ? { ...r, [col]: val } : r
+    );
+    setUpload({ ...upload, rows });
   }
 
   function toggleSubject(col: string) {
@@ -652,28 +664,40 @@ export default function Home() {
             </div>
 
             <div>
-              {previewHtml && recordTotal > 1 && (
+              {previewHtml && (
                 <div className="pvbar">
-                  <button
-                    className="pvnav"
-                    disabled={previewIndex === 0}
-                    onClick={() => setPreviewIndex((i) => Math.max(0, i - 1))}
-                  >
-                    ◀
-                  </button>
-                  <span className="pvcount">
-                    Record {previewIndex + 1} of {recordTotal}
-                  </span>
-                  <button
-                    className="pvnav"
-                    disabled={previewIndex >= recordTotal - 1}
-                    onClick={() => setPreviewIndex((i) => Math.min(recordTotal - 1, i + 1))}
-                  >
-                    ▶
-                  </button>
-                  <button className="btn ghost small" disabled={singleBusy} onClick={downloadCurrent}>
-                    {singleBusy ? "…" : "Download this one"}
-                  </button>
+                  {recordTotal > 1 && (
+                    <>
+                      <button
+                        className="pvnav"
+                        disabled={previewIndex === 0}
+                        onClick={() => setPreviewIndex((i) => Math.max(0, i - 1))}
+                      >
+                        ◀
+                      </button>
+                      <span className="pvcount">
+                        Record {previewIndex + 1} of {recordTotal}
+                      </span>
+                      <button
+                        className="pvnav"
+                        disabled={previewIndex >= recordTotal - 1}
+                        onClick={() => setPreviewIndex((i) => Math.min(recordTotal - 1, i + 1))}
+                      >
+                        ▶
+                      </button>
+                    </>
+                  )}
+                  <div className="pvactions">
+                    <button
+                      className={"btn ghost small" + (editing ? " on" : "")}
+                      onClick={() => setEditing((e) => !e)}
+                    >
+                      {editing ? "Done editing" : "Edit fields"}
+                    </button>
+                    <button className="btn ghost small" disabled={singleBusy} onClick={downloadCurrent}>
+                      {singleBusy ? "…" : "Download this one"}
+                    </button>
+                  </div>
                 </div>
               )}
               <div className="preview-frame">
@@ -685,6 +709,27 @@ export default function Home() {
                   </div>
                 )}
               </div>
+              {editing && previewHtml && upload && (
+                <div className="editbox">
+                  <div className="section-h">Edit this record</div>
+                  {selected.fields
+                    .filter((f) => mapping[f.key])
+                    .map((f) => (
+                      <div className="maprow" key={f.key}>
+                        <label>{f.label}</label>
+                        <input
+                          className="text"
+                          type="text"
+                          value={upload.rows[previewIndex]?.[mapping[f.key]] ?? ""}
+                          onChange={(e) => editCell(f.key, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  <p className="hint" style={{ marginTop: 8 }}>
+                    Edits apply to this record only and are included when you generate.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
               <div className="bar">

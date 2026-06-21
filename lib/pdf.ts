@@ -396,9 +396,21 @@ async function feeReceiptPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts)
   await drawSignatureRow(doc, page, opts, edu, "Received by", v.received_by);
 }
 
-/* ---------- student ID card ---------- */
+/* ---------- cards (ID + library) ---------- */
 
-async function idCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+type CardCfg = {
+  tag: string;
+  role: string;
+  name: string;
+  rows: { k: string; v: string }[];
+  idValue: string;
+};
+
+async function cardPDF(
+  doc: PDFDocument,
+  cfg: CardCfg,
+  opts: RenderOpts
+): Promise<void> {
   const W = 360, H = 227;
   const page = doc.addPage([W, H]);
   const edu = accentColor(opts.branding);
@@ -407,38 +419,108 @@ async function idCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Pr
   const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
   const white = rgb(1, 1, 1);
 
-  // top colour bar
+  // top colour bar: school name + tag
   const barH = 40;
   page.drawRectangle({ x: 0, y: H - barH, width: W, height: barH, color: edu });
   page.drawText(opts.branding?.schoolName?.trim() || "School name", {
     x: 16, y: H - 26, size: 13, font: serifB, color: white,
   });
-  const tag = "STUDENT ID";
-  const tw = sans.widthOfTextAtSize(tag, 8);
-  page.drawText(tag, { x: W - 16 - tw, y: H - 24, size: 8, font: sans, color: white });
+  const tw = sans.widthOfTextAtSize(cfg.tag, 8);
+  page.drawText(cfg.tag, { x: W - 16 - tw, y: H - 24, size: 8, font: sans, color: white });
 
-  // name + details (left)
-  let y = H - barH - 34;
-  page.drawText(v.full_name || "Full name", { x: 16, y, size: 18, font: serifB, color: C.ink });
-  y -= 16;
-  page.drawText("STUDENT", { x: 16, y, size: 8, font: sans, color: C.muted });
-  y -= 26;
-  page.drawText("CLASS", { x: 16, y: y + 12, size: 8, font: sans, color: C.muted });
-  page.drawText(v.class_name || "—", { x: 16, y, size: 13, font: sansB, color: C.ink });
-  y -= 30;
-  page.drawText("VALID UNTIL", { x: 16, y: y + 12, size: 8, font: sans, color: C.muted });
-  page.drawText(v.valid_until || "—", { x: 16, y, size: 13, font: sansB, color: C.ink });
+  // photo (left)
+  const boxX = 16, boxW = 50, boxH = 64, boxTop = H - barH - 10;
+  const photo = await embedDataUrl(doc, opts.photoDataUrl, boxH, boxW);
+  if (photo) {
+    page.drawImage(photo.image, {
+      x: boxX + (boxW - photo.w) / 2,
+      y: boxTop - boxH + (boxH - photo.h) / 2,
+      width: photo.w, height: photo.h,
+    });
+  } else {
+    page.drawRectangle({
+      x: boxX, y: boxTop - boxH, width: boxW, height: boxH,
+      borderColor: C.line, borderWidth: 1, color: C.paper,
+    });
+  }
+
+  // info (middle)
+  const ix = boxX + boxW + 14;
+  let y = H - barH - 26;
+  page.drawText(cfg.name || "Full name", { x: ix, y, size: 16, font: serifB, color: C.ink });
+  y -= 13;
+  page.drawText(cfg.role.toUpperCase(), { x: ix, y, size: 8, font: sans, color: C.muted });
+  y -= 22;
+  for (const r of cfg.rows) {
+    page.drawText(r.k.toUpperCase(), { x: ix, y, size: 8, font: sans, color: C.muted });
+    page.drawText(r.v || "—", { x: ix, y: y - 13, size: 13, font: sansB, color: C.ink });
+    y -= 30;
+  }
 
   // QR (right)
-  const qr = await embedDataUrl(doc, opts.qrDataUrl, 86, 86);
+  const qr = await embedDataUrl(doc, opts.qrDataUrl, 76, 76);
+  const qrX = W - 16 - 76;
   if (qr) {
-    page.drawImage(qr.image, { x: W - 16 - qr.w, y: 40, width: qr.w, height: qr.h });
+    page.drawImage(qr.image, { x: qrX, y: 36, width: qr.w, height: qr.h });
   } else {
-    page.drawRectangle({ x: W - 102, y: 40, width: 86, height: 86, borderColor: C.line, borderWidth: 1 });
+    page.drawRectangle({ x: qrX, y: 36, width: 76, height: 76, borderColor: C.line, borderWidth: 1 });
   }
-  const id = v.student_id || "ID-000";
-  const idw = sansB.widthOfTextAtSize(id, 11);
-  page.drawText(id, { x: W - 59 - idw / 2, y: 24, size: 11, font: sansB, color: edu });
+  const idw = sansB.widthOfTextAtSize(cfg.idValue, 10);
+  page.drawText(cfg.idValue, { x: qrX + 38 - idw / 2, y: 20, size: 10, font: sansB, color: edu });
+}
+
+async function idCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  await cardPDF(doc, {
+    tag: "STUDENT ID", role: "Student", name: v.full_name,
+    rows: [{ k: "Class", v: v.class_name }, { k: "Valid until", v: v.valid_until }],
+    idValue: v.student_id || "ID-000",
+  }, opts);
+}
+
+async function libraryCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  await cardPDF(doc, {
+    tag: "LIBRARY", role: "Member", name: v.full_name,
+    rows: [{ k: "Class", v: v.class_name }, { k: "Expires", v: v.expiry }],
+    idValue: v.member_id || "MEM-000",
+  }, opts);
+}
+
+async function hallPassPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const W = 400, H = 200;
+  const page = doc.addPage([W, H]);
+  const edu = accentColor(opts.branding);
+  const serifB = await doc.embedFont(StandardFonts.TimesRomanBold);
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  page.drawRectangle({ x: 0, y: 0, width: 10, height: H, color: edu });
+  const M = 28;
+  let y = H - 28;
+  page.drawText("CORRIDOR PASS", { x: M, y, size: 8, font: sansB, color: edu });
+  const school = opts.branding?.schoolName?.trim();
+  if (school) {
+    const w = sans.widthOfTextAtSize(school, 9);
+    page.drawText(school, { x: W - 18 - w, y, size: 9, font: sans, color: C.muted });
+  }
+  y -= 26;
+  page.drawText("Hall Pass", { x: M, y, size: 24, font: serifB, color: C.ink });
+  y -= 22;
+  page.drawText("Permission for", { x: M, y, size: 9, font: sans, color: C.muted });
+  y -= 18;
+  page.drawText(v.student_name || "Student name", { x: M, y, size: 18, font: serifB, color: C.ink });
+
+  const cells: [string, string][] = [
+    ["Destination", v.destination],
+    ["Time out", v.time_out],
+    ["Date", v.date],
+    ["Issued by", v.teacher],
+  ];
+  const cw = (W - M - 18) / 4;
+  cells.forEach(([k, val], i) => {
+    const cx = M + i * cw;
+    page.drawText(k.toUpperCase(), { x: cx, y: 44, size: 8, font: sans, color: C.muted });
+    page.drawText(val || "—", { x: cx, y: 28, size: 13, font: sansB, color: C.ink });
+  });
 }
 
 /* ---------- letters ---------- */
@@ -539,6 +621,38 @@ async function enrollmentLetterPDF(doc: PDFDocument, v: FieldValues, opts: Rende
   );
 }
 
+async function permissionSlipPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const greeting = v.guardian ? `Dear ${v.guardian},` : "Dear Parent / Guardian,";
+  await letterPDF(
+    doc, opts, "Permission Slip", greeting,
+    [
+      `Your child ${v.student_name || "the student"} has been invited to take part in ${v.event || "a school activity"}. We are seeking your permission for them to attend.`,
+      "Please sign below to give consent for your child to participate. Return this slip to the school office by the date indicated.",
+    ],
+    [
+      { k: "Activity", v: v.event },
+      { k: "Date", v: v.event_date },
+      { k: "Location", v: v.location },
+      { k: "Cost", v: v.cost },
+    ],
+    "Parent / guardian signature", "", v
+  );
+}
+
+async function referenceLetterPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const who = v.role ? `${v.student_name || "the student"}, ${v.role}` : v.student_name || "the student";
+  await letterPDF(
+    doc, opts, "Reference Letter", "To whom it may concern,",
+    [
+      v.body ||
+        `I am pleased to provide this reference for ${who}. Throughout the time I have known them, they have consistently demonstrated strong character, reliability, and ability. I recommend them without reservation and am confident they will be a valuable addition to any institution or programme.`,
+      "Please do not hesitate to contact me should you require any further information.",
+    ],
+    [],
+    v.position || "Authorised signatory", v.signatory, v
+  );
+}
+
 export async function renderPDF(
   slug: string,
   v: FieldValues,
@@ -554,6 +668,18 @@ export async function renderPDF(
       break;
     case "student-id-card":
       await idCardPDF(doc, v, opts);
+      break;
+    case "library-card":
+      await libraryCardPDF(doc, v, opts);
+      break;
+    case "hall-pass":
+      await hallPassPDF(doc, v, opts);
+      break;
+    case "permission-slip":
+      await permissionSlipPDF(doc, v, opts);
+      break;
+    case "reference-letter":
+      await referenceLetterPDF(doc, v, opts);
       break;
     case "attendance-letter":
       await attendanceLetterPDF(doc, v, opts);
