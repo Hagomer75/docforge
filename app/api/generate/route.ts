@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       rows,
       startIndex,
       filenamePattern,
+      lang,
     } = await req.json();
     const template = getTemplate(templateSlug);
     if (!template) {
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
         branding,
         qrDataUrl: qr,
         photoDataUrl: photos[i],
+        lang: lang === "ar" ? "ar" : "en",
       });
       const base = applyPattern(
         filenamePattern,

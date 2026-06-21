@@ -5,11 +5,25 @@ import {
   PDFFont,
   PDFImage,
   PDFPage,
-  StandardFonts,
   rgb,
   RGB,
 } from "pdf-lib";
 import { Branding, FieldValues, RenderOpts } from "./templates";
+import { Lang } from "./i18n";
+import { embedDocFonts, shape } from "./arabic";
+import { docLabels } from "./doclabels";
+
+// Set per render so the low-level draw/measure helpers can shape Arabic
+// without threading the language through every call.
+let curLang: Lang = "en";
+const SH = (s: string) => shape(s, curLang);
+
+// Make a page auto-shape every string it draws (Arabic joining + RTL order).
+function patchDraw(page: PDFPage) {
+  const orig = page.drawText.bind(page);
+  (page as unknown as { drawText: PDFPage["drawText"] }).drawText = ((txt: string, o) =>
+    orig(SH(String(txt)), o)) as PDFPage["drawText"];
+}
 
 function hex(h: string): RGB {
   const n = parseInt(h.replace("#", ""), 16);
@@ -30,7 +44,8 @@ function accentColor(branding?: Branding): RGB {
 }
 
 function spaced(text: string): string {
-  return text.toUpperCase().split("").join(" ");
+  // Letter-spacing/upper-casing only makes sense for Latin.
+  return curLang === "ar" ? text : text.toUpperCase().split("").join(" ");
 }
 
 function wrap(font: PDFFont, size: number, max: number, text: string): string[] {
@@ -40,7 +55,7 @@ function wrap(font: PDFFont, size: number, max: number, text: string): string[] 
   let cur = "";
   for (const w of words) {
     const test = cur ? cur + " " + w : w;
-    if (font.widthOfTextAtSize(test, size) > max && cur) {
+    if (font.widthOfTextAtSize(SH(test), size) > max && cur) {
       lines.push(cur);
       cur = w;
     } else {
@@ -60,7 +75,7 @@ function drawCentered(
   size: number,
   color: RGB
 ) {
-  const w = font.widthOfTextAtSize(text, size);
+  const w = font.widthOfTextAtSize(SH(text), size);
   page.drawText(text, { x: cx - w / 2, y, size, font, color });
 }
 
@@ -120,8 +135,7 @@ async function drawDocHeader(
   metaLines: string[]
 ): Promise<number> {
   const { width, height } = page.getSize();
-  const serifB = await doc.embedFont(StandardFonts.TimesRomanBold);
-  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const { serifB, sans } = await embedDocFonts(doc, opts.lang);
   const M = 48;
   const right = width - M;
   let y = height - 70;
@@ -137,7 +151,7 @@ async function drawDocHeader(
   if (school) page.drawText(school, { x: titleX, y: y - 15, size: 11, font: sans, color: C.muted });
 
   metaLines.filter(Boolean).forEach((line, i) => {
-    const w = sans.widthOfTextAtSize(line, 11);
+    const w = sans.widthOfTextAtSize(SH(line), 11);
     page.drawText(line, { x: right - w, y: y + 4 - i * 14, size: 11, font: sans, color: C.muted });
   });
 
@@ -156,8 +170,8 @@ async function drawSignatureRow(
   value: string
 ): Promise<void> {
   const { width } = page.getSize();
-  const sans = await doc.embedFont(StandardFonts.Helvetica);
-  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const { sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const D = docLabels(opts.lang ?? "en");
   const M = 48;
   const right = width - M;
   const sy = 96;
@@ -169,7 +183,7 @@ async function drawSignatureRow(
   if (label) page.drawText(label, { x: M, y: sy - 28, size: 10, font: sans, color: C.muted });
 
   page.drawLine({ start: { x: right - 170, y: sy }, end: { x: right, y: sy }, color: edu, thickness: 1 });
-  page.drawText("Official stamp", { x: right - 170, y: sy - 14, size: 10, font: sans, color: C.muted });
+  page.drawText(D.officialStamp, { x: right - 170, y: sy - 14, size: 10, font: sans, color: C.muted });
 }
 
 async function certificatePDF(
@@ -178,12 +192,11 @@ async function certificatePDF(
   opts: RenderOpts
 ): Promise<void> {
   const page = doc.addPage([841.89, 595.28]); // A4 landscape
+  patchDraw(page);
   const { width, height } = page.getSize();
   const edu = accentColor(opts.branding);
-  const serifB = await doc.embedFont(StandardFonts.TimesRomanBold);
-  const serifI = await doc.embedFont(StandardFonts.TimesRomanItalic);
-  const sans = await doc.embedFont(StandardFonts.Helvetica);
-  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const { serifB, serifI, sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const D = docLabels(opts.lang ?? "en");
   const mid = width / 2;
 
   page.drawRectangle({
@@ -203,7 +216,7 @@ async function certificatePDF(
   const gap = 12;
   const schoolSize = 14;
   const bandY = 516;
-  const schoolW = school ? serifB.widthOfTextAtSize(school, schoolSize) : 0;
+  const schoolW = school ? serifB.widthOfTextAtSize(SH(school), schoolSize) : 0;
   const logoW = logo ? logo.w : 0;
   const totalW = logoW + (logo && school ? gap : 0) + schoolW;
   let startX = mid - totalW / 2;
@@ -224,10 +237,10 @@ async function certificatePDF(
     });
   }
 
-  drawCentered(page, mid, 466, spaced("Certificate of Achievement"), sansB, 11, C.gold);
-  drawCentered(page, mid, 424, v.award_title || "Award", serifB, 28, edu);
-  drawCentered(page, mid, 388, "This certificate is proudly presented to", sans, 12, C.muted);
-  drawCentered(page, mid, 346, v.recipient_name || "Recipient name", serifB, 32, C.ink);
+  drawCentered(page, mid, 466, spaced(D.certKicker), sansB, 11, C.gold);
+  drawCentered(page, mid, 424, v.award_title || D.awardDefault, serifB, 28, edu);
+  drawCentered(page, mid, 388, D.presentedTo, sans, 12, C.muted);
+  drawCentered(page, mid, 346, v.recipient_name || D.recipientName, serifB, 32, C.ink);
   page.drawLine({
     start: { x: width * 0.28, y: 336 }, end: { x: width * 0.72, y: 336 },
     color: C.line, thickness: 1.5,
@@ -237,9 +250,9 @@ async function certificatePDF(
   detail.forEach((ln, i) => drawCentered(page, mid, 306 - i * 17, ln, serifI, 12, C.muted));
 
   const cols: [number, string, string][] = [
-    [width * 0.27, v.teacher, "Teacher"],
-    [width * 0.5, v.date, "Date"],
-    [width * 0.73, v.school, "School"],
+    [width * 0.27, v.teacher, D.teacher],
+    [width * 0.5, v.date, D.date],
+    [width * 0.73, v.school, D.school],
   ];
   for (const [cx, value, label] of cols) {
     if (value) drawCentered(page, cx, 104, value, sansB, 12, C.ink);
@@ -254,11 +267,11 @@ async function progressReportPDF(
   opts: RenderOpts
 ): Promise<void> {
   const page = doc.addPage([595.28, 841.89]); // A4 portrait
+  patchDraw(page);
   const { width, height } = page.getSize();
   const edu = accentColor(opts.branding);
-  const serifB = await doc.embedFont(StandardFonts.TimesRomanBold);
-  const sans = await doc.embedFont(StandardFonts.Helvetica);
-  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const D = docLabels(opts.lang ?? "en");
   const M = 48;
   const right = width - M;
 
@@ -272,12 +285,12 @@ async function progressReportPDF(
     page.drawImage(logo.image, { x: M, y: y - 6, width: logo.w, height: logo.h });
     titleX = M + logo.w + 12;
   }
-  page.drawText("Progress Report", { x: titleX, y, size: 22, font: serifB, color: edu });
+  page.drawText(D.prTitle, { x: titleX, y, size: 22, font: serifB, color: edu });
   if (school) page.drawText(school, { x: titleX, y: y - 15, size: 11, font: sans, color: C.muted });
 
   const meta = [v.term, v.date].filter(Boolean);
   meta.forEach((mtxt, i) => {
-    const w = sans.widthOfTextAtSize(mtxt, 11);
+    const w = sans.widthOfTextAtSize(SH(mtxt), 11);
     page.drawText(mtxt, { x: right - w, y: y + 4 - i * 14, size: 11, font: sans, color: C.muted });
   });
   y -= 22;
@@ -285,17 +298,17 @@ async function progressReportPDF(
 
   // Student / class
   y -= 40;
-  page.drawText("STUDENT", { x: M, y: y + 18, size: 9, font: sans, color: C.muted });
-  page.drawText(v.student_name || "Student name", { x: M, y, size: 16, font: sansB, color: C.ink });
-  page.drawText("CLASS", { x: width / 2, y: y + 18, size: 9, font: sans, color: C.muted });
+  page.drawText(D.student, { x: M, y: y + 18, size: 9, font: sans, color: C.muted });
+  page.drawText(v.student_name || D.studentName, { x: M, y, size: 16, font: sansB, color: C.ink });
+  page.drawText(D.klass, { x: width / 2, y: y + 18, size: 9, font: sans, color: C.muted });
   page.drawText(v.class_name || "—", { x: width / 2, y, size: 16, font: sansB, color: C.ink });
 
   // Marks table — rows come from the chosen subject columns.
   y -= 42;
   const rowH = 28;
   page.drawRectangle({ x: M, y: y - 6, width: right - M, height: 24, color: C.paper });
-  page.drawText("SUBJECT", { x: M + 12, y, size: 10, font: sans, color: C.muted });
-  page.drawText("MARK", { x: right - 70, y, size: 10, font: sans, color: C.muted });
+  page.drawText(D.subject, { x: M + 12, y, size: 10, font: sans, color: C.muted });
+  page.drawText(D.mark, { x: right - 70, y, size: 10, font: sans, color: C.muted });
   y -= 8;
 
   const subjects = opts.subjects ?? [];
@@ -305,7 +318,7 @@ async function progressReportPDF(
     y -= rowH;
     page.drawText(s.label, { x: M + 12, y: y + 8, size: 13, font: sans, color: C.ink });
     const mk = s.mark || "—";
-    const mw = sansB.widthOfTextAtSize(mk, 13);
+    const mw = sansB.widthOfTextAtSize(SH(mk), 13);
     page.drawText(mk, { x: right - 12 - mw, y: y + 8, size: 13, font: sansB, color: C.ink });
   }
   page.drawLine({ start: { x: M, y }, end: { x: right, y }, color: C.line, thickness: 1 });
@@ -318,7 +331,7 @@ async function progressReportPDF(
     x: M, y: y - boxH + 18, width: right - M, height: boxH,
     color: C.paper, borderColor: C.line, borderWidth: 1,
   });
-  page.drawText("TEACHER'S COMMENT", { x: M + 14, y, size: 9, font: sansB, color: C.gold });
+  page.drawText(D.teacherComment, { x: M + 14, y, size: 9, font: sansB, color: C.gold });
   commentLines.forEach((ln, i) =>
     page.drawText(ln, { x: M + 14, y: y - 20 - i * 17, size: 12, font: sans, color: C.ink })
   );
@@ -329,45 +342,46 @@ async function progressReportPDF(
   if (sig) page.drawImage(sig.image, { x: M, y: sy + 4, width: sig.w, height: sig.h });
   page.drawLine({ start: { x: M, y: sy }, end: { x: M + 180, y: sy }, color: C.line, thickness: 1 });
   if (v.teacher) page.drawText(v.teacher, { x: M, y: sy + 6, size: 12, font: sansB, color: C.ink });
-  page.drawText("Teacher", { x: M, y: sy - 14, size: 10, font: sans, color: C.muted });
+  page.drawText(D.teacher, { x: M, y: sy - 14, size: 10, font: sans, color: C.muted });
   page.drawLine({ start: { x: right - 180, y: sy }, end: { x: right, y: sy }, color: C.line, thickness: 1 });
-  page.drawText("Signature", { x: right - 180, y: sy - 14, size: 10, font: sans, color: C.muted });
+  page.drawText(D.signature, { x: right - 180, y: sy - 14, size: 10, font: sans, color: C.muted });
 }
 
 /* ---------- fee receipt ---------- */
 
 async function feeReceiptPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
   const page = doc.addPage([595.28, 841.89]);
+  patchDraw(page);
   const { width } = page.getSize();
   const edu = accentColor(opts.branding);
-  const sans = await doc.embedFont(StandardFonts.Helvetica);
-  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const { sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const D = docLabels(opts.lang ?? "en");
   const M = 48;
   const right = width - M;
 
-  let y = await drawDocHeader(doc, page, "Fee Receipt", opts, edu, [
-    `Receipt: ${v.receipt_no || "—"}`,
+  let y = await drawDocHeader(doc, page, D.frTitle, opts, edu, [
+    `${D.receipt}: ${v.receipt_no || "—"}`,
     v.date || "",
   ]);
 
   // received from / method
   y -= 34;
-  page.drawText("RECEIVED FROM", { x: M, y: y + 16, size: 9, font: sans, color: C.muted });
-  page.drawText(v.student_name || "Student name", { x: M, y, size: 15, font: sansB, color: C.ink });
-  page.drawText("METHOD", { x: width / 2, y: y + 16, size: 9, font: sans, color: C.muted });
+  page.drawText(D.receivedFrom, { x: M, y: y + 16, size: 9, font: sans, color: C.muted });
+  page.drawText(v.student_name || D.studentName, { x: M, y, size: 15, font: sansB, color: C.ink });
+  page.drawText(D.method, { x: width / 2, y: y + 16, size: 9, font: sans, color: C.muted });
   page.drawText(v.payment_method || "—", { x: width / 2, y, size: 15, font: sansB, color: C.ink });
 
   // line item table
   y -= 36;
   page.drawRectangle({ x: M, y: y - 6, width: right - M, height: 24, color: C.paper });
-  page.drawText("DESCRIPTION", { x: M + 12, y, size: 10, font: sans, color: C.muted });
-  page.drawText("AMOUNT", { x: right - 90, y, size: 10, font: sans, color: C.muted });
+  page.drawText(D.description, { x: M + 12, y, size: 10, font: sans, color: C.muted });
+  page.drawText(D.amount, { x: right - 90, y, size: 10, font: sans, color: C.muted });
   y -= 8;
   page.drawLine({ start: { x: M, y }, end: { x: right, y }, color: C.line, thickness: 1 });
   y -= 30;
-  page.drawText(v.fee_type || "Tuition fee", { x: M + 12, y: y + 9, size: 13, font: sans, color: C.ink });
+  page.drawText(v.fee_type || D.tuitionDefault, { x: M + 12, y: y + 9, size: 13, font: sans, color: C.ink });
   const amt = v.amount || "—";
-  const aw = sansB.widthOfTextAtSize(amt, 13);
+  const aw = sansB.widthOfTextAtSize(SH(amt), 13);
   page.drawText(amt, { x: right - 12 - aw, y: y + 9, size: 13, font: sansB, color: C.ink });
   page.drawLine({ start: { x: M, y }, end: { x: right, y }, color: C.line, thickness: 1 });
 
@@ -376,24 +390,24 @@ async function feeReceiptPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts)
   const totalRow = (yy: number, label: string, val: string, big = false) => {
     page.drawText(label, { x: tx, y: yy, size: big ? 13 : 11, font: big ? sansB : sans, color: big ? edu : C.muted });
     const f = big ? sansB : sans;
-    const w = f.widthOfTextAtSize(val, big ? 15 : 12);
+    const w = f.widthOfTextAtSize(SH(val), big ? 15 : 12);
     page.drawText(val, { x: right - w, y: yy, size: big ? 15 : 12, font: big ? sansB : sans, color: big ? edu : C.ink });
   };
   y -= 26;
-  totalRow(y, "Total", v.amount || "—");
+  totalRow(y, D.total, v.amount || "—");
   y -= 18;
-  totalRow(y, "Paid", v.amount_paid || v.amount || "—");
+  totalRow(y, D.paid, v.amount_paid || v.amount || "—");
   y -= 8;
   page.drawLine({ start: { x: tx, y }, end: { x: right, y }, color: edu, thickness: 1.5 });
   y -= 20;
-  totalRow(y, "Balance", v.balance || "0", true);
+  totalRow(y, D.balance, v.balance || "0", true);
 
   // PAID pill
   y -= 30;
   page.drawRectangle({ x: M, y: y - 4, width: 58, height: 20, color: edu });
-  page.drawText("PAID", { x: M + 14, y: y + 1, size: 11, font: sansB, color: rgb(1, 1, 1) });
+  page.drawText(D.paidPill, { x: M + 14, y: y + 1, size: 11, font: sansB, color: rgb(1, 1, 1) });
 
-  await drawSignatureRow(doc, page, opts, edu, "Received by", v.received_by);
+  await drawSignatureRow(doc, page, opts, edu, D.receivedBy, v.received_by);
 }
 
 /* ---------- cards (ID + library) ---------- */
@@ -413,19 +427,19 @@ async function cardPDF(
 ): Promise<void> {
   const W = 360, H = 227;
   const page = doc.addPage([W, H]);
+  patchDraw(page);
   const edu = accentColor(opts.branding);
-  const serifB = await doc.embedFont(StandardFonts.TimesRomanBold);
-  const sans = await doc.embedFont(StandardFonts.Helvetica);
-  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const D = docLabels(opts.lang ?? "en");
   const white = rgb(1, 1, 1);
 
   // top colour bar: school name + tag
   const barH = 40;
   page.drawRectangle({ x: 0, y: H - barH, width: W, height: barH, color: edu });
-  page.drawText(opts.branding?.schoolName?.trim() || "School name", {
+  page.drawText(opts.branding?.schoolName?.trim() || D.schoolNamePh, {
     x: 16, y: H - 26, size: 13, font: serifB, color: white,
   });
-  const tw = sans.widthOfTextAtSize(cfg.tag, 8);
+  const tw = sans.widthOfTextAtSize(SH(cfg.tag), 8);
   page.drawText(cfg.tag, { x: W - 16 - tw, y: H - 24, size: 8, font: sans, color: white });
 
   // photo (left)
@@ -447,7 +461,7 @@ async function cardPDF(
   // info (middle)
   const ix = boxX + boxW + 14;
   let y = H - barH - 26;
-  page.drawText(cfg.name || "Full name", { x: ix, y, size: 16, font: serifB, color: C.ink });
+  page.drawText(cfg.name || D.studentName, { x: ix, y, size: 16, font: serifB, color: C.ink });
   y -= 13;
   page.drawText(cfg.role.toUpperCase(), { x: ix, y, size: 8, font: sans, color: C.muted });
   y -= 22;
@@ -465,22 +479,24 @@ async function cardPDF(
   } else {
     page.drawRectangle({ x: qrX, y: 36, width: 76, height: 76, borderColor: C.line, borderWidth: 1 });
   }
-  const idw = sansB.widthOfTextAtSize(cfg.idValue, 10);
+  const idw = sansB.widthOfTextAtSize(SH(cfg.idValue), 10);
   page.drawText(cfg.idValue, { x: qrX + 38 - idw / 2, y: 20, size: 10, font: sansB, color: edu });
 }
 
 async function idCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const D = docLabels(opts.lang ?? "en");
   await cardPDF(doc, {
-    tag: "STUDENT ID", role: "Student", name: v.full_name,
-    rows: [{ k: "Class", v: v.class_name }, { k: "Valid until", v: v.valid_until }],
+    tag: D.idTag, role: D.idRole, name: v.full_name,
+    rows: [{ k: D.klass, v: v.class_name }, { k: D.validUntil, v: v.valid_until }],
     idValue: v.student_id || "ID-000",
   }, opts);
 }
 
 async function libraryCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const D = docLabels(opts.lang ?? "en");
   await cardPDF(doc, {
-    tag: "LIBRARY", role: "Member", name: v.full_name,
-    rows: [{ k: "Class", v: v.class_name }, { k: "Expires", v: v.expiry }],
+    tag: D.libTag, role: D.libRole, name: v.full_name,
+    rows: [{ k: D.klass, v: v.class_name }, { k: D.expires, v: v.expiry }],
     idValue: v.member_id || "MEM-000",
   }, opts);
 }
@@ -488,32 +504,32 @@ async function libraryCardPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts
 async function hallPassPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
   const W = 400, H = 200;
   const page = doc.addPage([W, H]);
+  patchDraw(page);
   const edu = accentColor(opts.branding);
-  const serifB = await doc.embedFont(StandardFonts.TimesRomanBold);
-  const sans = await doc.embedFont(StandardFonts.Helvetica);
-  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang);
+  const D = docLabels(opts.lang ?? "en");
 
   page.drawRectangle({ x: 0, y: 0, width: 10, height: H, color: edu });
   const M = 28;
   let y = H - 28;
-  page.drawText("CORRIDOR PASS", { x: M, y, size: 8, font: sansB, color: edu });
+  page.drawText(D.corridorPass, { x: M, y, size: 8, font: sansB, color: edu });
   const school = opts.branding?.schoolName?.trim();
   if (school) {
-    const w = sans.widthOfTextAtSize(school, 9);
+    const w = sans.widthOfTextAtSize(SH(school), 9);
     page.drawText(school, { x: W - 18 - w, y, size: 9, font: sans, color: C.muted });
   }
   y -= 26;
-  page.drawText("Hall Pass", { x: M, y, size: 24, font: serifB, color: C.ink });
+  page.drawText(D.hallPass, { x: M, y, size: 24, font: serifB, color: C.ink });
   y -= 22;
-  page.drawText("Permission for", { x: M, y, size: 9, font: sans, color: C.muted });
+  page.drawText(D.permissionFor, { x: M, y, size: 9, font: sans, color: C.muted });
   y -= 18;
-  page.drawText(v.student_name || "Student name", { x: M, y, size: 18, font: serifB, color: C.ink });
+  page.drawText(v.student_name || D.studentName, { x: M, y, size: 18, font: serifB, color: C.ink });
 
   const cells: [string, string][] = [
-    ["Destination", v.destination],
-    ["Time out", v.time_out],
-    ["Date", v.date],
-    ["Issued by", v.teacher],
+    [D.destination, v.destination],
+    [D.timeOut, v.time_out],
+    [D.date, v.date],
+    [D.issuedBy, v.teacher],
   ];
   const cw = (W - M - 18) / 4;
   cells.forEach(([k, val], i) => {
@@ -537,22 +553,26 @@ async function letterPDF(
   v: FieldValues
 ): Promise<void> {
   const page = doc.addPage([595.28, 841.89]);
+  patchDraw(page);
   const { width } = page.getSize();
   const edu = accentColor(opts.branding);
-  const sans = await doc.embedFont(StandardFonts.Helvetica);
-  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const { sans, sansB } = await embedDocFonts(doc, opts.lang);
   const M = 48;
   const right = width - M;
   const textW = right - M;
+  const rtl = opts.lang === "ar";
+  // Right-align body text for Arabic.
+  const lineX = (text: string, font: PDFFont, size: number) =>
+    rtl ? right - font.widthOfTextAtSize(SH(text), size) : M;
 
   let y = await drawDocHeader(doc, page, title, opts, edu, [v.date || ""]);
   y -= 30;
-  page.drawText(greeting, { x: M, y, size: 13, font: sansB, color: C.ink });
+  page.drawText(greeting, { x: lineX(greeting, sansB, 13), y, size: 13, font: sansB, color: C.ink });
   y -= 24;
 
   const drawPara = (text: string) => {
     for (const ln of wrap(sans, 12, textW, text)) {
-      page.drawText(ln, { x: M, y, size: 12, font: sans, color: C.ink });
+      page.drawText(ln, { x: lineX(ln, sans, 12), y, size: 12, font: sans, color: C.ink });
       y -= 18;
     }
     y -= 8;
@@ -584,72 +604,64 @@ async function letterPDF(
 }
 
 async function attendanceLetterPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
-  const greeting = v.guardian ? `Dear ${v.guardian},` : "Dear Parent / Guardian,";
-  const msg =
-    v.message ||
-    `This letter is to formally notify you regarding the school attendance of your child, ${v.student_name || "the student"}. We request your support in ensuring regular attendance going forward.`;
+  const D = docLabels(opts.lang ?? "en");
+  const greeting = v.guardian ? D.dearName(v.guardian) : D.dearGuardian;
+  const msg = v.message || D.attMsg(v.student_name || D.theStudent);
   await letterPDF(
-    doc, opts, "Attendance Notice", greeting,
-    [msg, "Please contact the school office if you have any questions or wish to discuss the matter further."],
+    doc, opts, D.attTitle, greeting,
+    [msg, D.attClose],
     [
-      { k: "Student", v: v.student_name },
-      { k: "Class", v: v.class_name },
-      { k: "Attendance", v: v.attendance_pct },
-      { k: "Days absent", v: v.days_absent },
-      { k: "Period", v: v.period },
+      { k: D.student, v: v.student_name },
+      { k: D.klass, v: v.class_name },
+      { k: D.attendance, v: v.attendance_pct },
+      { k: D.daysAbsent, v: v.days_absent },
+      { k: D.period, v: v.period },
     ],
-    v.signatory ? "" : "School administration", v.signatory, v
+    v.signatory ? "" : D.schoolAdmin, v.signatory, v
   );
 }
 
 async function enrollmentLetterPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
-  const status = v.status || "confirmed";
+  const D = docLabels(opts.lang ?? "en");
+  const status = v.status || D.confirmedDefault;
   await letterPDF(
-    doc, opts, "Enrollment Confirmation", "To whom it may concern,",
+    doc, opts, D.enrTitle, D.toWhom,
+    [D.enrBody(v.student_name || D.theStudent, status, v.academic_year || "—"), D.enrClose],
     [
-      `This is to certify that ${v.student_name || "the student"} is ${status} for enrollment at our institution for the academic year ${v.academic_year || "—"}.`,
-      "This confirmation is issued upon request and may be used for official purposes.",
+      { k: D.student, v: v.student_name },
+      { k: D.classGrade, v: v.class_name },
+      { k: D.academicYear, v: v.academic_year },
+      { k: D.admissionNo, v: v.admission_no },
+      { k: D.statusLbl, v: status },
     ],
-    [
-      { k: "Student", v: v.student_name },
-      { k: "Class / grade", v: v.class_name },
-      { k: "Academic year", v: v.academic_year },
-      { k: "Admission no.", v: v.admission_no },
-      { k: "Status", v: status },
-    ],
-    "Authorised signatory", v.signatory, v
+    D.authSignatory, v.signatory, v
   );
 }
 
 async function permissionSlipPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
-  const greeting = v.guardian ? `Dear ${v.guardian},` : "Dear Parent / Guardian,";
+  const D = docLabels(opts.lang ?? "en");
+  const greeting = v.guardian ? D.dearName(v.guardian) : D.dearGuardian;
   await letterPDF(
-    doc, opts, "Permission Slip", greeting,
+    doc, opts, D.permTitle, greeting,
+    [D.permBody(v.student_name || D.theStudent, v.event || D.activityDefault), D.permClose],
     [
-      `Your child ${v.student_name || "the student"} has been invited to take part in ${v.event || "a school activity"}. We are seeking your permission for them to attend.`,
-      "Please sign below to give consent for your child to participate. Return this slip to the school office by the date indicated.",
+      { k: D.activity, v: v.event },
+      { k: D.date, v: v.event_date },
+      { k: D.location, v: v.location },
+      { k: D.cost, v: v.cost },
     ],
-    [
-      { k: "Activity", v: v.event },
-      { k: "Date", v: v.event_date },
-      { k: "Location", v: v.location },
-      { k: "Cost", v: v.cost },
-    ],
-    "Parent / guardian signature", "", v
+    D.parentSig, "", v
   );
 }
 
 async function referenceLetterPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
-  const who = v.role ? `${v.student_name || "the student"}, ${v.role}` : v.student_name || "the student";
+  const D = docLabels(opts.lang ?? "en");
+  const who = v.role ? `${v.student_name || D.theStudent}, ${v.role}` : v.student_name || D.theStudent;
   await letterPDF(
-    doc, opts, "Reference Letter", "To whom it may concern,",
-    [
-      v.body ||
-        `I am pleased to provide this reference for ${who}. Throughout the time I have known them, they have consistently demonstrated strong character, reliability, and ability. I recommend them without reservation and am confident they will be a valuable addition to any institution or programme.`,
-      "Please do not hesitate to contact me should you require any further information.",
-    ],
+    doc, opts, D.refTitle, D.toWhom,
+    [v.body || D.refBody(who), D.refClose],
     [],
-    v.position || "Authorised signatory", v.signatory, v
+    v.position || D.authSignatory, v.signatory, v
   );
 }
 
@@ -658,6 +670,7 @@ export async function renderPDF(
   v: FieldValues,
   opts: RenderOpts = {}
 ): Promise<Uint8Array> {
+  curLang = opts.lang === "ar" ? "ar" : "en";
   const doc = await PDFDocument.create();
   switch (slug) {
     case "progress-report":

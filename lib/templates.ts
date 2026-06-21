@@ -192,6 +192,7 @@ export type RenderOpts = {
   branding?: Branding;
   qrDataUrl?: string; // server-generated QR for templates with qrField
   photoDataUrl?: string; // server-fetched photo for templates with photoField
+  lang?: "en" | "ar"; // document language (drives labels + Arabic shaping)
 };
 
 export function resolveValues(

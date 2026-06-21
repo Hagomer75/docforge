@@ -240,6 +240,7 @@ export default function Home() {
             subjectColumns: subjectCols,
             branding: brandingPayload(branding),
             row: upload.rows[idx],
+            lang,
           }),
         });
         const { html } = await r.json();
@@ -249,7 +250,7 @@ export default function Home() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex]);
+  }, [selected, upload, mapping, subjectCols, branding, nameMapped, previewIndex, lang]);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -329,6 +330,7 @@ export default function Home() {
       filenamePattern,
       rows,
       startIndex,
+      lang,
     };
   }
 
