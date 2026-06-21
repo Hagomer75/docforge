@@ -34,6 +34,9 @@ const IC = {
   door: I(<><rect x="4" y="3" width="9" height="18" rx="1" /><circle cx="10" cy="12" r="1" /><path d="M15 12h6M18 9l3 3-3 3" /></>),
   clipboard: I(<><rect x="6" y="4" width="12" height="17" rx="2" /><path d="M9 4V3a1 1 0 011-1h4a1 1 0 011 1v1" /><path d="M9 13l2 2 4-4" /></>),
   refstar: I(<><path d="M7 3h7l4 4v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" /><path d="M14 3v4h4" /><path d="M11.5 11l.85 1.7 1.9.25-1.4 1.35.35 1.9-1.7-.9-1.7.9.35-1.9L8.75 13l1.9-.25z" /></>),
+  type: I(<><path d="M5 19L10 5l5 14" /><path d="M7.2 14h5.6" /><path d="M16.5 19h3" /></>),
+  grid4: I(<><rect x="3" y="3" width="7.5" height="7.5" rx="1" /><rect x="13.5" y="3" width="7.5" height="7.5" rx="1" /><rect x="3" y="13.5" width="7.5" height="7.5" rx="1" /><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1" /></>),
+  tedit: I(<><path d="M5 6h10M10 6v12" /><path d="M16 13l4 4-1.2 3.2-3.2-1.2z" /></>),
 };
 
 type Lang = "en" | "ar";
@@ -119,6 +122,9 @@ const FEATURES = [
   { ic: IC.shield, en: { t: "Pre-flight checks", d: "Warns about blank required fields or duplicate names before you generate." }, ar: { t: "فحص مسبق", d: "ينبّه للحقول المطلوبة الفارغة أو الأسماء المكررة قبل الإنشاء." } },
   { ic: IC.stack, en: { t: "Whole grades at once", d: "Hundreds of students handled in small batches with a progress bar — no timeouts." }, ar: { t: "صفوف كاملة دفعة واحدة", d: "مئات الطلاب على دفعات صغيرة مع شريط تقدّم — بدون انقطاع." } },
   { ic: IC.qr, en: { t: "QR codes", d: "ID & library cards get a scannable QR code built from the ID automatically." }, ar: { t: "رموز QR", d: "تحصل بطاقات الهوية والمكتبة على رمز QR قابل للمسح من الرقم تلقائياً." } },
+  { ic: IC.type, en: { t: "Document fonts", d: "Pick Classic, Modern or Typewriter to match your school's look. Arabic always uses its own font." }, ar: { t: "خطوط المستند", d: "اختر كلاسيكي أو حديث أو آلة كاتبة لتناسب هوية مدرستك. العربية تستخدم خطها الخاص دائماً." } },
+  { ic: IC.grid4, en: { t: "Print sheets", d: "For cards, print 2, 4 or 10 per A4 page with cut guides — a whole class set in one PDF." }, ar: { t: "أوراق الطباعة", d: "للبطاقات، اطبع 2 أو 4 أو 10 لكل ورقة A4 مع علامات القص — فصل كامل في ملف PDF واحد." } },
+  { ic: IC.tedit, en: { t: "Custom wording", d: "Rewrite the fixed text printed on any document — titles, captions, signature labels." }, ar: { t: "صياغة مخصصة", d: "أعد كتابة النص الثابت المطبوع على أي مستند — العناوين والتسميات وعناوين التوقيع." } },
 ];
 
 const FAQ = [
@@ -129,6 +135,8 @@ const FAQ = [
   { en: { q: "How many students at once?", a: "Hundreds are fine. DocForge generates in small batches with a progress bar, so big grades don't time out." }, ar: { q: "كم طالباً دفعة واحدة؟", a: "المئات لا مشكلة. يُنشئ DocForge على دفعات صغيرة مع شريط تقدّم، فلا تنقطع الصفوف الكبيرة." } },
   { en: { q: "Can I download just one PDF?", a: "Yes. In the preview, use ‘Download this one’ to save only the current record." }, ar: { q: "هل يمكنني تنزيل ملف PDF واحد فقط؟", a: "نعم. في المعاينة، استخدم ’تنزيل هذا فقط‘ لحفظ السجل الحالي فقط." } },
   { en: { q: "How do photos on ID cards work?", a: "Add a column of direct image links (a public .png/.jpg URL per student) and map it to Photo URL." }, ar: { q: "كيف تعمل الصور على بطاقات الهوية؟", a: "أضف عموداً بروابط صور مباشرة (رابط ‎.png/.jpg‎ عام لكل طالب) واربطه بحقل رابط الصورة." } },
+  { en: { q: "Can I print many cards on one page?", a: "Yes — for ID, library and hall-pass cards, choose 2, 4 or 10 per page under ‘Cards per page’. You get one PDF with cut guides to print and trim." }, ar: { q: "هل يمكنني طباعة عدة بطاقات في صفحة واحدة؟", a: "نعم — لبطاقات الهوية والمكتبة وتصاريح المرور، اختر 2 أو 4 أو 10 لكل صفحة من ’بطاقات لكل صفحة‘. تحصل على ملف PDF واحد مع علامات قص للطباعة والقص." } },
+  { en: { q: "Can I change the fonts or wording?", a: "Yes. Pick a font under Branding (Classic / Modern / Typewriter), and use the Wording panel to rewrite any printed label — per template and per language." }, ar: { q: "هل يمكنني تغيير الخطوط أو الصياغة؟", a: "نعم. اختر خطاً من قسم الهوية (كلاسيكي / حديث / آلة كاتبة)، واستخدم لوحة الصياغة لإعادة كتابة أي نص مطبوع — لكل قالب ولكل لغة." } },
 ];
 
 const FIXES = [
