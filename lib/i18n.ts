@@ -240,6 +240,10 @@ export const TEMPLATE_I18N: Record<string, { ar: { name: string; description: st
   "enrollment-confirmation": { ar: { name: "تأكيد التسجيل", description: "تأكيد قبول، A4 عمودي" } },
   "permission-slip": { ar: { name: "إذن مشاركة", description: "خطاب موافقة، A4 عمودي" } },
   "reference-letter": { ar: { name: "خطاب توصية", description: "خطاب توصية، A4 عمودي" } },
+  "completion-certificate": { ar: { name: "شهادة إتمام", description: "إتمام دورة / سنة، A4 أفقي" } },
+  "transfer-certificate": { ar: { name: "شهادة نقل", description: "شهادة مغادرة / نقل، A4 عمودي" } },
+  "bonafide-certificate": { ar: { name: "شهادة قيد", description: "إثبات التسجيل، A4 عمودي" } },
+  "character-certificate": { ar: { name: "شهادة حسن سيرة وسلوك", description: "شهادة سلوك، A4 عمودي" } },
 };
 
 export const GROUP_I18N: Record<string, string> = {
@@ -293,6 +297,14 @@ export const FIELD_I18N: Record<string, string> = {
   role: "الدور / العلاقة",
   body: "نص الخطاب",
   position: "المنصب",
+  program: "البرنامج / الصف",
+  completion_date: "تاريخ الإتمام",
+  result: "النتيجة / التقدير",
+  dob: "تاريخ الميلاد",
+  date_leaving: "تاريخ المغادرة",
+  reason: "السبب",
+  conduct: "السلوك",
+  purpose: "الغرض",
 };
 
 // Interpolate {tokens} in a string.

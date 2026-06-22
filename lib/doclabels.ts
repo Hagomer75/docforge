@@ -90,6 +90,33 @@ const S = {
   refTitle: { en: "Reference Letter", ar: "خطاب توصية" },
   refClose: { en: "Please do not hesitate to contact me should you require any further information.", ar: "لا تترددوا في التواصل معي إذا احتجتم أي معلومات إضافية." },
   theStudent: { en: "the student", ar: "الطالب" },
+
+  // completion / graduation certificate
+  complKicker: { en: "Certificate of Completion", ar: "شهادة إتمام" },
+  complCertify: { en: "This is to certify that", ar: "نشهد بأن" },
+  program: { en: "Program", ar: "البرنامج" },
+  result: { en: "Result", ar: "النتيجة" },
+  completionDate: { en: "Completion date", ar: "تاريخ الإتمام" },
+  programDefault: { en: "the programme of study", ar: "البرنامج الدراسي" },
+
+  // transfer certificate
+  tcTitle: { en: "Transfer Certificate", ar: "شهادة نقل" },
+  tcClose: { en: "This certificate is issued for the purpose of transfer or admission to another institution.", ar: "تصدر هذه الشهادة لغرض النقل أو القبول في مؤسسة أخرى." },
+  dob: { en: "Date of birth", ar: "تاريخ الميلاد" },
+  dateLeaving: { en: "Date of leaving", ar: "تاريخ المغادرة" },
+  reason: { en: "Reason", ar: "السبب" },
+  conduct: { en: "Conduct", ar: "السلوك" },
+
+  // bonafide certificate
+  bfTitle: { en: "Bonafide Certificate", ar: "شهادة قيد" },
+  bfClose: { en: "This certificate is issued upon request for official use.", ar: "تصدر هذه الشهادة بناءً على الطلب للاستخدام الرسمي." },
+  purpose: { en: "Purpose", ar: "الغرض" },
+  purposeDefault: { en: "general use", ar: "الاستخدام العام" },
+
+  // character certificate
+  ccTitle: { en: "Character Certificate", ar: "شهادة حسن سيرة وسلوك" },
+  ccClose: { en: "We wish them success in all their future endeavours.", ar: "نتمنى له كل التوفيق في مستقبله." },
+  conductDefault: { en: "good", ar: "حسن" },
 };
 
 export type DocLabels = Record<keyof typeof S, string> & {
@@ -99,6 +126,11 @@ export type DocLabels = Record<keyof typeof S, string> & {
   enrBody: (n: string, status: string, year: string) => string;
   permBody: (n: string, event: string) => string;
   refBody: (who: string) => string;
+  complBody: (program: string, year: string) => string;
+  tcBody: (n: string, klass: string, dateLeaving: string) => string;
+  bfBody: (n: string, klass: string, year: string) => string;
+  bfPurpose: (purpose: string) => string;
+  ccBody: (n: string, klass: string, conduct: string) => string;
 };
 
 // Which fixed labels each template exposes for user editing (the headline text
@@ -115,6 +147,10 @@ export const EDITABLE_LABELS: Record<string, LabelKey[]> = {
   "enrollment-confirmation": ["enrTitle", "toWhom", "enrClose", "academicYear", "admissionNo", "statusLbl", "authSignatory"],
   "permission-slip": ["permTitle", "permClose", "activity", "location", "cost", "parentSig"],
   "reference-letter": ["refTitle", "refClose", "authSignatory"],
+  "completion-certificate": ["complKicker", "complCertify", "program", "result", "completionDate"],
+  "transfer-certificate": ["tcTitle", "tcClose", "dob", "dateLeaving", "reason", "conduct"],
+  "bonafide-certificate": ["bfTitle", "bfClose", "purpose"],
+  "character-certificate": ["ccTitle", "ccClose", "conduct", "period"],
 };
 
 export function isEditableLabel(k: string): k is LabelKey {
@@ -137,6 +173,15 @@ export function docLabels(lang: Lang, overrides?: Record<string, string>): DocLa
       `دُعي ابنكم/ابنتكم ${n} للمشاركة في ${event}. نلتمس موافقتكم على حضوره/حضورها.`;
     out.refBody = (who) =>
       `يسعدني تقديم هذه التوصية لـ ${who}. لقد أظهر/أظهرت طوال معرفتي به/بها شخصية قوية والتزاماً وقدرة، وأوصي به/بها دون تحفّظ.`;
+    out.complBody = (program, year) =>
+      `قد أتمّ بنجاح ${program} للعام الدراسي ${year}.`;
+    out.tcBody = (n, klass, dateLeaving) =>
+      `نشهد بأن ${n}، الطالب في ${klass}، قد غادر هذه المؤسسة بتاريخ ${dateLeaving}. وفيما يلي بياناته.`;
+    out.bfBody = (n, klass, year) =>
+      `نشهد بأن ${n} طالب نظامي في هذه المؤسسة، ومقيّد في ${klass} خلال العام الدراسي ${year}.`;
+    out.bfPurpose = (purpose) => `تصدر هذه الشهادة لغرض ${purpose}.`;
+    out.ccBody = (n, klass, conduct) =>
+      `نشهد بأن ${n}، الطالب في ${klass}، قد حافظ على سلوك ${conduct} طوال فترة دراسته في هذه المؤسسة.`;
   } else {
     out.dearName = (n) => `Dear ${n},`;
     out.attMsg = (n) =>
@@ -147,6 +192,15 @@ export function docLabels(lang: Lang, overrides?: Record<string, string>): DocLa
       `Your child ${n} has been invited to take part in ${event}. We are seeking your permission for them to attend.`;
     out.refBody = (who) =>
       `I am pleased to provide this reference for ${who}. Throughout the time I have known them, they have consistently demonstrated strong character, reliability, and ability. I recommend them without reservation.`;
+    out.complBody = (program, year) =>
+      `has successfully completed ${program} for the academic year ${year}.`;
+    out.tcBody = (n, klass, dateLeaving) =>
+      `This is to certify that ${n}, a student of ${klass}, has left this institution on ${dateLeaving}. Their particulars are recorded below.`;
+    out.bfBody = (n, klass, year) =>
+      `This is to certify that ${n} is a bonafide student of this institution, enrolled in ${klass} during the academic year ${year}.`;
+    out.bfPurpose = (purpose) => `This certificate is issued for the purpose of ${purpose}.`;
+    out.ccBody = (n, klass, conduct) =>
+      `This is to certify that ${n}, a student of ${klass}, has maintained ${conduct} conduct throughout their time at this institution.`;
   }
   // Apply user wording overrides (scalar labels only).
   if (overrides) {

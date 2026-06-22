@@ -182,6 +182,34 @@ const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
       <path d="M11.5 11l.85 1.7 1.9.25-1.4 1.35.35 1.9-1.7-.9-1.7.9.35-1.9L8.75 13l1.9-.25z" />
     </>
   ),
+  "completion-certificate": I(
+    <>
+      <path d="M4 5h16v11H4z" />
+      <circle cx="12" cy="10.5" r="3" />
+      <path d="M10 13l-1 5 3-1.8L15 18l-1-5" />
+    </>
+  ),
+  "transfer-certificate": I(
+    <>
+      <rect x="4" y="4" width="13" height="16" rx="2" />
+      <path d="M8 9h5M8 12h5M8 15h3" />
+      <path d="M16 12h6M19 9l3 3-3 3" />
+    </>
+  ),
+  "bonafide-certificate": I(
+    <>
+      <rect x="5" y="3" width="14" height="18" rx="2" />
+      <path d="M9 8h6M9 12h6" />
+      <path d="M9.5 16.5l1.5 1.5 3-3" />
+    </>
+  ),
+  "character-certificate": I(
+    <>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5.5 20c.6-3.5 3.2-5.5 6.5-5.5s5.9 2 6.5 5.5" />
+      <path d="M16.5 4.5l.6 1.3 1.4.2-1 1 .25 1.4-1.25-.66-1.25.66.25-1.4-1-1 1.4-.2z" />
+    </>
+  ),
 };
 const DEFAULT_ICON = I(<rect x="4" y="4" width="16" height="16" rx="2" />);
 

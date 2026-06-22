@@ -823,6 +823,106 @@ async function referenceLetterPDF(doc: PDFDocument, v: FieldValues, opts: Render
   );
 }
 
+async function transferCertPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const D = docLabels(opts.lang ?? "en", opts.labels);
+  await letterPDF(
+    doc, opts, D.tcTitle, D.toWhom,
+    [D.tcBody(v.student_name || D.theStudent, v.class_name || "—", v.date_leaving || "—"), D.tcClose],
+    [
+      { k: D.student, v: v.student_name },
+      { k: D.admissionNo, v: v.admission_no },
+      { k: D.dob, v: v.dob },
+      { k: D.klass, v: v.class_name },
+      { k: D.dateLeaving, v: v.date_leaving },
+      { k: D.reason, v: v.reason },
+      { k: D.conduct, v: v.conduct },
+    ],
+    D.authSignatory, v.signatory, v
+  );
+}
+
+async function bonafideCertPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const D = docLabels(opts.lang ?? "en", opts.labels);
+  await letterPDF(
+    doc, opts, D.bfTitle, D.toWhom,
+    [
+      D.bfBody(v.student_name || D.theStudent, v.class_name || "—", v.academic_year || "—"),
+      D.bfPurpose(v.purpose || D.purposeDefault),
+      D.bfClose,
+    ],
+    [
+      { k: D.student, v: v.student_name },
+      { k: D.klass, v: v.class_name },
+      { k: D.academicYear, v: v.academic_year },
+      { k: D.dob, v: v.dob },
+    ],
+    D.authSignatory, v.signatory, v
+  );
+}
+
+async function characterCertPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const D = docLabels(opts.lang ?? "en", opts.labels);
+  await letterPDF(
+    doc, opts, D.ccTitle, D.toWhom,
+    [D.ccBody(v.student_name || D.theStudent, v.class_name || "—", v.conduct || D.conductDefault), D.ccClose],
+    [
+      { k: D.student, v: v.student_name },
+      { k: D.klass, v: v.class_name },
+      { k: D.period, v: v.period },
+      { k: D.conduct, v: v.conduct || D.conductDefault },
+    ],
+    D.authSignatory, v.signatory, v
+  );
+}
+
+// Decorative landscape completion / graduation certificate (mirrors certificatePDF).
+async function completionCertPDF(doc: PDFDocument, v: FieldValues, opts: RenderOpts): Promise<void> {
+  const page = doc.addPage([841.89, 595.28]);
+  patchDraw(page);
+  whiteBg(page);
+  const { width, height } = page.getSize();
+  const edu = accentColor(opts.branding);
+  const { serifB, sans, sansB } = await embedDocFonts(doc, opts.lang, opts.branding?.font);
+  const D = docLabels(opts.lang ?? "en", opts.labels);
+  const mid = width / 2;
+
+  page.drawRectangle({ x: 24, y: 24, width: width - 48, height: height - 48, borderColor: edu, borderWidth: 3 });
+  page.drawRectangle({ x: 34, y: 34, width: width - 68, height: height - 68, borderColor: C.gold, borderWidth: 1 });
+
+  const logo = await embedLogo(doc, opts.branding, 40, 150);
+  const school = opts.branding?.schoolName?.trim();
+  const pos = opts.branding?.logoPos ?? "center";
+  const gap = 12, schoolSize = 14, bandY = 516;
+  const schoolW = school ? serifB.widthOfTextAtSize(SH(school), schoolSize) : 0;
+  const logoW = logo ? logo.w : 0;
+  const totalW = logoW + (logo && school ? gap : 0) + schoolW;
+  let startX = mid - totalW / 2;
+  if (pos === "left") startX = 60;
+  else if (pos === "right") startX = width - 60 - totalW;
+  if (logo) page.drawImage(logo.image, { x: startX, y: bandY - logo.h / 2, width: logo.w, height: logo.h });
+  if (school) page.drawText(school, { x: startX + logoW + (logo ? gap : 0), y: bandY - schoolSize / 2 + 1, size: schoolSize, font: serifB, color: edu });
+
+  drawCentered(page, mid, 466, spaced(D.complKicker), sansB, 13, C.gold);
+  drawCentered(page, mid, 428, D.complCertify, sans, 12, C.muted);
+  drawCentered(page, mid, 386, v.student_name || D.studentName, serifB, 32, C.ink);
+  page.drawLine({ start: { x: width * 0.28, y: 376 }, end: { x: width * 0.72, y: 376 }, color: C.line, thickness: 1.5 });
+
+  const body = wrap(sans, 14, width * 0.7, D.complBody(v.program || D.programDefault, v.academic_year || "—"));
+  body.forEach((ln, i) => drawCentered(page, mid, 344 - i * 19, ln, sans, 14, C.ink));
+  if (v.result) drawCentered(page, mid, 344 - body.length * 19 - 8, `${D.result}: ${v.result}`, sansB, 13, edu);
+
+  const cols: [number, string, string][] = [
+    [width * 0.27, v.signatory, D.authSignatory],
+    [width * 0.5, v.completion_date, D.completionDate],
+    [width * 0.73, v.school, D.school],
+  ];
+  for (const [cx, value, label] of cols) {
+    if (value) drawCentered(page, cx, 104, value, sansB, 12, C.ink);
+    page.drawLine({ start: { x: cx - 70, y: 96 }, end: { x: cx + 70, y: 96 }, color: C.line, thickness: 1 });
+    drawCentered(page, cx, 82, label, sans, 10, C.muted);
+  }
+}
+
 /* ---------- card sheets (tile many cards per A4 page) ---------- */
 
 const A4 = { w: 595.28, h: 841.89 };
@@ -954,6 +1054,18 @@ export async function renderPDF(
       break;
     case "enrollment-confirmation":
       await enrollmentLetterPDF(doc, v, opts);
+      break;
+    case "completion-certificate":
+      await completionCertPDF(doc, v, opts);
+      break;
+    case "transfer-certificate":
+      await transferCertPDF(doc, v, opts);
+      break;
+    case "bonafide-certificate":
+      await bonafideCertPDF(doc, v, opts);
+      break;
+    case "character-certificate":
+      await characterCertPDF(doc, v, opts);
       break;
     default:
       await certificatePDF(doc, v, opts);

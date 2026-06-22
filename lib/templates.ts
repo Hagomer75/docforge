@@ -188,6 +188,67 @@ export const TEMPLATES: Template[] = [
       { key: "date", label: "Date", required: false },
     ],
   },
+  {
+    slug: "completion-certificate",
+    name: "Completion certificate",
+    description: "Course / year completion, A4 landscape",
+    group: "Certificates",
+    fields: [
+      { key: "student_name", label: "Student name", required: true },
+      { key: "program", label: "Program / grade", required: true },
+      { key: "academic_year", label: "Academic year", required: false },
+      { key: "result", label: "Result / grade", required: false },
+      { key: "completion_date", label: "Completion date", required: false },
+      { key: "signatory", label: "Signed by", required: false },
+      { key: "school", label: "School", required: false },
+    ],
+  },
+  {
+    slug: "transfer-certificate",
+    name: "Transfer certificate",
+    description: "Leaving / transfer certificate, A4 portrait",
+    group: "Certificates",
+    fields: [
+      { key: "student_name", label: "Student name", required: true },
+      { key: "admission_no", label: "Admission no.", required: false },
+      { key: "dob", label: "Date of birth", required: false },
+      { key: "class_name", label: "Class", required: false },
+      { key: "date_leaving", label: "Date of leaving", required: false },
+      { key: "reason", label: "Reason", required: false },
+      { key: "conduct", label: "Conduct", required: false },
+      { key: "signatory", label: "Signed by", required: false },
+      { key: "date", label: "Date", required: false },
+    ],
+  },
+  {
+    slug: "bonafide-certificate",
+    name: "Bonafide certificate",
+    description: "Enrollment verification, A4 portrait",
+    group: "Certificates",
+    fields: [
+      { key: "student_name", label: "Student name", required: true },
+      { key: "class_name", label: "Class", required: false },
+      { key: "academic_year", label: "Academic year", required: false },
+      { key: "dob", label: "Date of birth", required: false },
+      { key: "purpose", label: "Purpose", required: false },
+      { key: "signatory", label: "Signed by", required: false },
+      { key: "date", label: "Date", required: false },
+    ],
+  },
+  {
+    slug: "character-certificate",
+    name: "Character certificate",
+    description: "Conduct certificate, A4 portrait",
+    group: "Certificates",
+    fields: [
+      { key: "student_name", label: "Student name", required: true },
+      { key: "class_name", label: "Class", required: false },
+      { key: "period", label: "Period attended", required: false },
+      { key: "conduct", label: "Conduct", required: false },
+      { key: "signatory", label: "Signed by", required: false },
+      { key: "date", label: "Date", required: false },
+    ],
+  },
 ];
 
 export function getTemplate(slug: string): Template | undefined {
@@ -727,6 +788,96 @@ function referenceLetterHTML(v: FieldValues, opts: RenderOpts): string {
   return letterHTML(D.refTitle, body, v.position || D.authSignatory, v.signatory, v, opts);
 }
 
+function transferCertHTML(v: FieldValues, opts: RenderOpts): string {
+  const D = docLabels(opts.lang ?? "en", opts.labels);
+  const body = `<p class="greet">${esc(D.toWhom)}</p>
+  <p>${esc(D.tcBody(v.student_name || D.theStudent, v.class_name || "—", v.date_leaving || "—"))}</p>
+  <div class="facts">
+    <div><div class="k">${esc(D.student)}</div><div class="v">${esc(v.student_name) || "—"}</div></div>
+    <div><div class="k">${esc(D.admissionNo)}</div><div class="v">${esc(v.admission_no) || "—"}</div></div>
+    <div><div class="k">${esc(D.dob)}</div><div class="v">${esc(v.dob) || "—"}</div></div>
+    <div><div class="k">${esc(D.klass)}</div><div class="v">${esc(v.class_name) || "—"}</div></div>
+    <div><div class="k">${esc(D.dateLeaving)}</div><div class="v">${esc(v.date_leaving) || "—"}</div></div>
+    <div><div class="k">${esc(D.reason)}</div><div class="v">${esc(v.reason) || "—"}</div></div>
+    <div><div class="k">${esc(D.conduct)}</div><div class="v">${esc(v.conduct) || "—"}</div></div>
+  </div>
+  <p>${esc(D.tcClose)}</p>`;
+  return letterHTML(D.tcTitle, body, D.authSignatory, v.signatory, v, opts);
+}
+
+function bonafideCertHTML(v: FieldValues, opts: RenderOpts): string {
+  const D = docLabels(opts.lang ?? "en", opts.labels);
+  const body = `<p class="greet">${esc(D.toWhom)}</p>
+  <p>${esc(D.bfBody(v.student_name || D.theStudent, v.class_name || "—", v.academic_year || "—"))}</p>
+  <div class="facts">
+    <div><div class="k">${esc(D.student)}</div><div class="v">${esc(v.student_name) || "—"}</div></div>
+    <div><div class="k">${esc(D.klass)}</div><div class="v">${esc(v.class_name) || "—"}</div></div>
+    <div><div class="k">${esc(D.academicYear)}</div><div class="v">${esc(v.academic_year) || "—"}</div></div>
+    <div><div class="k">${esc(D.dob)}</div><div class="v">${esc(v.dob) || "—"}</div></div>
+  </div>
+  <p>${esc(D.bfPurpose(v.purpose || D.purposeDefault))}</p>
+  <p>${esc(D.bfClose)}</p>`;
+  return letterHTML(D.bfTitle, body, D.authSignatory, v.signatory, v, opts);
+}
+
+function characterCertHTML(v: FieldValues, opts: RenderOpts): string {
+  const D = docLabels(opts.lang ?? "en", opts.labels);
+  const body = `<p class="greet">${esc(D.toWhom)}</p>
+  <p>${esc(D.ccBody(v.student_name || D.theStudent, v.class_name || "—", v.conduct || D.conductDefault))}</p>
+  <div class="facts">
+    <div><div class="k">${esc(D.student)}</div><div class="v">${esc(v.student_name) || "—"}</div></div>
+    <div><div class="k">${esc(D.klass)}</div><div class="v">${esc(v.class_name) || "—"}</div></div>
+    <div><div class="k">${esc(D.period)}</div><div class="v">${esc(v.period) || "—"}</div></div>
+    <div><div class="k">${esc(D.conduct)}</div><div class="v">${esc(v.conduct) || esc(D.conductDefault)}</div></div>
+  </div>
+  <p>${esc(D.ccClose)}</p>`;
+  return letterHTML(D.ccTitle, body, D.authSignatory, v.signatory, v, opts);
+}
+
+function completionCertHTML(v: FieldValues, opts: RenderOpts): string {
+  const edu = accentOf(opts.branding);
+  const school = opts.branding?.schoolName?.trim();
+  const logo = logoTag(opts.branding, 48);
+  const pos = opts.branding?.logoPos ?? "center";
+  const justify = pos === "left" ? "flex-start" : pos === "right" ? "flex-end" : "center";
+  const hasHeader = !!(logo || school);
+  const D = docLabels(opts.lang ?? "en", opts.labels);
+  return `<!doctype html><html${dirAttrs(opts)}><head><meta charset="utf-8"><style>
+${FONTS}
+${arFont(opts)}
+${fontVars(opts)}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:var(--f-body);color:${DEFAULTS.ink};background:#fff;display:flex;align-items:center;justify-content:center;padding:18px}
+.cert{width:100%;max-width:760px;aspect-ratio:1.414/1;border:3px solid ${edu};padding:10px}
+.inner{height:100%;border:1px solid ${DEFAULTS.gold};padding:4.5% 8% 6%;display:flex;flex-direction:column;align-items:center;text-align:center}
+.head{height:62px;width:100%;display:flex;align-items:center;gap:12px;justify-content:${justify};flex-shrink:0;margin-bottom:8px}
+.head img{max-height:48px;max-width:190px;object-fit:contain;display:block}
+.head .sn{font-family:var(--f-display);font-weight:600;font-size:15px;color:${edu};letter-spacing:.02em;white-space:nowrap}
+.kicker{font-size:13px;letter-spacing:.3em;text-transform:uppercase;color:${DEFAULTS.gold};font-weight:600}
+.intro{font-size:13px;color:${DEFAULTS.muted};letter-spacing:.04em;margin-top:14px}
+.name{font-family:var(--f-display);font-weight:600;font-size:31px;margin:8px 0;border-bottom:2px solid ${DEFAULTS.line};padding-bottom:8px;min-width:60%}
+.bodyline{font-size:14px;color:${DEFAULTS.ink};margin-top:8px;max-width:82%;line-height:1.5}
+.result{font-size:13px;color:${edu};font-weight:600;margin-top:10px;letter-spacing:.02em}
+.foot{margin-top:auto;display:flex;justify-content:space-between;width:100%;padding-top:20px;font-size:12px;color:${DEFAULTS.muted}}
+.foot b{display:block;color:${DEFAULTS.ink};font-weight:600;border-top:1px solid ${DEFAULTS.line};padding-top:5px;min-width:120px}
+</style></head><body>
+<div class="cert"><div class="inner">
+  ${hasHeader ? `<div class="head">${logo}${school ? `<span class="sn">${esc(school)}</span>` : ""}</div>` : `<div class="head" style="height:24px"></div>`}
+  <div class="kicker">${esc(D.complKicker)}</div>
+  <div class="intro">${esc(D.complCertify)}</div>
+  <div class="name">${esc(v.student_name) || esc(D.studentName)}</div>
+  <div class="bodyline">${esc(D.complBody(v.program || D.programDefault, v.academic_year || "—"))}</div>
+  ${v.result ? `<div class="result">${esc(D.result)}: ${esc(v.result)}</div>` : ""}
+  <div class="foot">
+    <span><b>${esc(v.signatory) || "&nbsp;"}</b>${esc(D.authSignatory)}</span>
+    <span><b>${esc(v.completion_date) || "&nbsp;"}</b>${esc(D.completionDate)}</span>
+    <span><b>${esc(v.school) || "&nbsp;"}</b>${esc(D.school)}</span>
+  </div>
+</div></div>
+</body></html>`;
+}
+
 export function renderHTML(slug: string, v: FieldValues, opts: RenderOpts = {}): string {
   switch (slug) {
     case "progress-report":
@@ -747,6 +898,14 @@ export function renderHTML(slug: string, v: FieldValues, opts: RenderOpts = {}):
       return permissionSlipHTML(v, opts);
     case "reference-letter":
       return referenceLetterHTML(v, opts);
+    case "completion-certificate":
+      return completionCertHTML(v, opts);
+    case "transfer-certificate":
+      return transferCertHTML(v, opts);
+    case "bonafide-certificate":
+      return bonafideCertHTML(v, opts);
+    case "character-certificate":
+      return characterCertHTML(v, opts);
     default:
       return certificateHTML(v, opts);
   }
